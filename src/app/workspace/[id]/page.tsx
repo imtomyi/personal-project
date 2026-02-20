@@ -19,11 +19,15 @@ import OnlineUsers from "@/components/OnlineUsers";
 import InviteModal from "@/components/InviteModal";
 import ApplyTemplateModal from "@/components/ApplyTemplateModal";
 import EisenhowerMatrix from "@/components/EisenhowerMatrix";
+import KanbanBoard from "@/components/KanbanBoard";
+import DailySchedule from "@/components/DailySchedule";
+import RecurringTaskManager from "@/components/RecurringTaskManager";
 import PomodoroTimer from "@/components/PomodoroTimer";
 import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import CommandPalette from "@/components/CommandPalette";
 import { useTheme } from "@/context/ThemeContext";
 import { useReminders } from "@/hooks/useReminders";
+import { useRecurringTasks } from "@/hooks/useRecurringTasks";
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -40,12 +44,15 @@ export default function WorkspaceDetailPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showApplyTemplate, setShowApplyTemplate] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [view, setView] = useState<"list" | "calendar" | "matrix">("list");
+  const [view, setView] = useState<"list" | "calendar" | "matrix" | "kanban" | "schedule">("list");
+  const [showRecurring, setShowRecurring] = useState(false);
 
   const { todos, loading: todosLoading, addTodo, addSubtask, updateTodo, deleteTodo, reorderTodos, applyTemplate } =
     useRealtimeTodos(workspaceId);
 
   useReminders(todos);
+
+  const { tasks: recurringTasks } = useRecurringTasks(workspaceId);
 
   const fetchWorkspace = useCallback(async () => {
     const { data } = await supabase
@@ -86,7 +93,7 @@ export default function WorkspaceDetailPage() {
     }
   }
 
-  async function handleUpdateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "priority">>) {
+  async function handleUpdateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "priority" | "status">>) {
     try {
       await updateTodo(id, updates);
       if (updates.is_completed !== undefined) {
@@ -120,6 +127,12 @@ export default function WorkspaceDetailPage() {
         break;
       case "view-calendar":
         setView("calendar");
+        break;
+      case "view-kanban":
+        setView("kanban");
+        break;
+      case "view-schedule":
+        setView("schedule");
         break;
       case "view-matrix":
         setView("matrix");
@@ -217,6 +230,15 @@ export default function WorkspaceDetailPage() {
               onMembersChange={fetchMembers}
             />
             <button
+              onClick={() => setShowRecurring(true)}
+              className="rounded-xl bg-black/[0.05] p-2.5 text-secondary transition-colors hover:bg-black/[0.08] hover:text-foreground dark:bg-white/[0.1] dark:hover:bg-white/[0.15] dark:hover:text-white"
+              title="반복 할일"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+            <button
               onClick={() => setShowApplyTemplate(true)}
               className="rounded-xl bg-black/[0.05] p-2.5 text-secondary transition-colors hover:bg-black/[0.08] hover:text-foreground dark:bg-white/[0.1] dark:hover:bg-white/[0.15] dark:hover:text-white"
               title="템플릿"
@@ -301,6 +323,32 @@ export default function WorkspaceDetailPage() {
                 캘린더
               </button>
               <button
+                onClick={() => setView("kanban")}
+                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
+                  view === "kanban"
+                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-secondary hover:text-foreground dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+                </svg>
+                칸반
+              </button>
+              <button
+                onClick={() => setView("schedule")}
+                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
+                  view === "schedule"
+                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-secondary hover:text-foreground dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                시간표
+              </button>
+              <button
                 onClick={() => setView("matrix")}
                 className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
                   view === "matrix"
@@ -343,6 +391,19 @@ export default function WorkspaceDetailPage() {
             onDeleteTodo={handleDeleteTodo}
             onAddTodo={handleCalendarAddTodo}
           />
+        ) : view === "kanban" ? (
+          <KanbanBoard
+            todos={todos}
+            members={members}
+            onUpdate={handleUpdateTodo}
+            onDelete={handleDeleteTodo}
+          />
+        ) : view === "schedule" ? (
+          <DailySchedule
+            todos={todos}
+            recurringTasks={recurringTasks}
+            onUpdate={handleUpdateTodo}
+          />
         ) : (
           <EisenhowerMatrix
             todos={todos}
@@ -378,6 +439,12 @@ export default function WorkspaceDetailPage() {
         <ApplyTemplateModal
           onApply={applyTemplate}
           onClose={() => setShowApplyTemplate(false)}
+        />
+      )}
+      {showRecurring && (
+        <RecurringTaskManager
+          workspaceId={workspaceId}
+          onClose={() => setShowRecurring(false)}
         />
       )}
 

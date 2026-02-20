@@ -34,12 +34,15 @@ export type Member = {
   profiles?: Profile;
 };
 
+export type TodoStatus = "todo" | "in_progress" | "done";
+
 export type Todo = {
   id: string;
   workspace_id: string;
   title: string;
   description: string | null;
   is_completed: boolean;
+  status: TodoStatus;
   priority: number | null;
   assigned_to: string | null;
   created_by: string | null;
@@ -47,6 +50,7 @@ export type Todo = {
   duration_days: number;
   sort_order: number;
   parent_id: string | null;
+  recurring_task_id: string | null;
   created_at: string;
   updated_at: string;
   profiles?: Profile | null;
@@ -136,6 +140,81 @@ export type MonthlyBudget = {
   budget_amount: number;
   created_at: string;
   updated_at: string;
+};
+
+// ============================================
+// 습관 트래커 타입
+// ============================================
+export type Habit = {
+  id: string;
+  user_id: string;
+  name: string;
+  emoji: string;
+  frequency: "daily" | "weekdays" | "weekly";
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+};
+
+export type HabitLog = {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  date: string; // "YYYY-MM-DD"
+  created_at: string;
+};
+
+// ============================================
+// 시간 추적 타입
+// ============================================
+export type TimeEntry = {
+  id: string;
+  user_id: string;
+  todo_id: string;
+  workspace_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_sec: number | null;
+  created_at: string;
+};
+
+// ============================================
+// 목표 시스템 타입
+// ============================================
+export type GoalStatus = "active" | "completed" | "archived";
+
+export type Goal = {
+  id: string;
+  user_id: string;
+  title: string;
+  emoji: string;
+  target_date: string | null;
+  progress: number;
+  status: GoalStatus;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// ============================================
+// 반복 할일 타입
+// ============================================
+export type RecurrenceType = "daily" | "weekdays" | "weekly" | "custom";
+
+export type RecurringTask = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  workspace_id: string | null;
+  priority: number | null;
+  recurrence: RecurrenceType;
+  days_of_week: number[];
+  time_start: string | null;
+  time_end: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
 };
 
 // ============================================

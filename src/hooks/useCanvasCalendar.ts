@@ -29,6 +29,7 @@ function canvasAssignmentToTodo(
     title: assignment.name,
     description: courseName,
     is_completed: assignment.has_submitted_submissions,
+    status: assignment.has_submitted_submissions ? "done" as const : "todo" as const,
     priority: null,
     assigned_to: null,
     created_by: null,
@@ -36,6 +37,7 @@ function canvasAssignmentToTodo(
     duration_days: 24, // 기본 1일 (hours)
     sort_order: 0,
     parent_id: null,
+    recurring_task_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     // WorkspaceTodo 추가 필드

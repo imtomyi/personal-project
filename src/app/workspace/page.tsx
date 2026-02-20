@@ -25,6 +25,8 @@ import WorkspaceList from "@/components/WorkspaceList";
 import WorkspaceCalendar from "@/components/WorkspaceCalendar";
 import ExerciseWidget from "@/components/widgets/ExerciseWidget";
 import DdayWidget from "@/components/widgets/DdayWidget";
+import HabitWidget from "@/components/widgets/HabitWidget";
+import GoalWidget from "@/components/widgets/GoalWidget";
 import WsWidgetPicker from "@/components/widgets/WsWidgetPicker";
 import SortableWsWidget from "@/components/widgets/SortableWsWidget";
 import { useDdayEntries } from "@/hooks/useDdayEntries";
@@ -35,6 +37,10 @@ function renderWidget(id: WsWidgetId) {
       return <ExerciseWidget />;
     case "dday":
       return <DdayWidget />;
+    case "habit":
+      return <HabitWidget />;
+    case "goals":
+      return <GoalWidget />;
     default:
       return null;
   }

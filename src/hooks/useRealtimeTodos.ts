@@ -75,7 +75,7 @@ export function useRealtimeTodos(workspaceId: string) {
     await fetchTodos();
   }
 
-  async function updateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "sort_order" | "priority">>) {
+  async function updateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "sort_order" | "priority" | "status">>) {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
 
     const { error } = await supabase

@@ -116,6 +116,7 @@ export function useAllWorkspaceTodos() {
             title: a.title,
             description: `📚 ${course?.name ?? ""}`,
             is_completed: a.is_completed,
+            status: a.is_completed ? "done" as const : "todo" as const,
             priority: null,
             assigned_to: null,
             created_by: a.user_id,
@@ -123,6 +124,7 @@ export function useAllWorkspaceTodos() {
             duration_days: 24, // 기본 1일
             sort_order: a.sort_order,
             parent_id: null,
+            recurring_task_id: null,
             created_at: a.created_at,
             updated_at: a.updated_at,
             workspace_name: wsInfo?.name ?? "Unknown",
