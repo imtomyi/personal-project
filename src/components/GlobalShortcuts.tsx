@@ -18,15 +18,20 @@ export default function GlobalShortcuts() {
   const handleCommandAction = useCallback(
     (action: string) => {
       switch (action) {
-        case "add-todo":
-          document.getElementById("add-todo-input")?.focus();
+        case "add-todo": {
+          // Try dashboard quick-add input first, then AddTodo input
+          const quickAdd = document.getElementById("quick-add-input");
+          const addTodo = document.getElementById("add-todo-input");
+          if (quickAdd) {
+            quickAdd.focus();
+          } else if (addTodo) {
+            addTodo.focus();
+          } else {
+            // Navigate to workspace dashboard if not on a page with an input
+            router.push("/workspace");
+          }
           break;
-        case "view-list":
-        case "view-calendar":
-        case "view-matrix":
-          // These only work on workspace detail — dispatch custom event
-          window.dispatchEvent(new CustomEvent("command-action", { detail: action }));
-          break;
+        }
         case "go-workspaces":
           router.push("/workspace");
           break;

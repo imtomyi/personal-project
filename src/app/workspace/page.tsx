@@ -411,6 +411,7 @@ export default function WorkspacesPage() {
                 type="text"
                 value={quickTitle}
                 onChange={(e) => setQuickTitle(e.target.value)}
+                id="quick-add-input"
                 placeholder="할 일 추가..."
                 className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground placeholder-secondary/60 outline-none dark:text-white"
                 disabled={quickAdding}
