@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx next build:*)",
+      "WebFetch(domain:portal.khu.ac.kr)",
+      "WebFetch(domain:everytime.kr)",
+      "WebFetch(domain:www.khu.ac.kr)",
+      "WebFetch(domain:khu.ac.kr)",
+      "Bash(curl:*)",
+      "WebFetch(domain:sites.google.com)",
+      "WebFetch(domain:cls.khu.ac.kr)",
+      "WebFetch(domain:shaksa.khu.ac.kr)",
+      "WebFetch(domain:com.khu.ac.kr)",
+      "WebFetch(domain:neoscholar.khu.ac.kr)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(npx supabase:*)",
+      "Bash(lsof:*)",
+      "Bash(wc:*)",
+      "WebFetch(domain:namu.wiki)",
+      "WebFetch(domain:khsma.khu.ac.kr)",
+      "WebFetch(domain:www.gbis.go.kr)",
+      "WebFetch(domain:m.gbis.go.kr)",
+      "Bash(python3:*)",
+      "Bash(kill:*)",
+      "Bash(for api in khu-calendar khu-shuttle khu-notices khu-meals khu-bus-arrival)",
+      "Bash(do curl -s -o /dev/null -w \"$api: HTTP %{http_code} | %{time_total}s\\\\n\" --max-time 15 http://localhost:3000/api/$api)",
+      "Bash(done)",
+      "Bash(npm uninstall:*)",
+      "Bash(vercel --version)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel:*)",
+      "Bash(git -C /Users/tom/Documents/GitHub/personal-project log --oneline -20)",
+      "Bash(npx vercel:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

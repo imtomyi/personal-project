@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Comment } from "@/lib/types";
+import { useRealtimeSubscription } from "./useRealtimeSubscription";
 
 export function useRealtimeComments(todoId: string | null) {
   const [comments, setComments] = useState<Comment[]>([]);
@@ -19,54 +20,70 @@ export function useRealtimeComments(todoId: string | null) {
       .order("created_at", { ascending: true });
     setComments(data ?? []);
     setLoading(false);
-  }, [todoId, supabase]);
+  }, [todoId]);
 
   useEffect(() => {
-    if (!todoId) {
-      setComments([]);
-      return;
-    }
+    if (!todoId) setComments([]);
+  }, [todoId]);
 
-    fetchComments();
-
-    const channel = supabase
-      .channel(`comments:${todoId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "comments",
-          filter: `todo_id=eq.${todoId}`,
-        },
-        () => {
-          fetchComments();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [todoId, fetchComments, supabase]);
+  useRealtimeSubscription({
+    channelName: `comments:${todoId}`,
+    table: "comments",
+    filter: `todo_id=eq.${todoId}`,
+    onChanged: fetchComments,
+    skip: !todoId,
+  });
 
   async function addComment(content: string) {
     if (!todoId) return;
     const { data: { user } } = await supabase.auth.getUser();
+
+    // 낙관적 업데이트: UI에 먼저 표시
+    const optimisticComment = {
+      id: crypto.randomUUID(),
+      todo_id: todoId,
+      user_id: user?.id ?? "",
+      content,
+      created_at: new Date().toISOString(),
+      profiles: {
+        id: user?.id ?? "",
+        email: user?.email ?? "",
+        name: user?.user_metadata?.full_name || user?.email || "",
+        avatar_url: user?.user_metadata?.avatar_url || null,
+      },
+    } as Comment;
+
+    setComments((prev) => [...prev, optimisticComment]);
+
     const { error } = await supabase.from("comments").insert({
       todo_id: todoId,
       user_id: user?.id,
       content,
     });
-    if (error) throw error;
+
+    if (error) {
+      // 실패 시 복구
+      setComments((prev) => prev.filter((c) => c.id !== optimisticComment.id));
+      throw error;
+    }
+
+    // DB에서 실제 데이터로 동기화
+    await fetchComments();
   }
 
   async function deleteComment(commentId: string) {
+    // 낙관적 업데이트: UI에서 먼저 제거
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+
     const { error } = await supabase
       .from("comments")
       .delete()
       .eq("id", commentId);
-    if (error) throw error;
+
+    if (error) {
+      await fetchComments();
+      throw error;
+    }
   }
 
   return { comments, loading, addComment, deleteComment };

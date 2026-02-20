@@ -5,28 +5,47 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { useRealtimeTodos } from "@/hooks/useRealtimeTodos";
-import type { Workspace, Member } from "@/lib/types";
+import type { Workspace, Member, Todo } from "@/lib/types";
+import { SECTION_HEADER_MARKER } from "@/lib/types";
+import { nowKST, toDateStr, parseLocalDate } from "@/lib/date";
 import Header from "@/components/Header";
 import AddTodo from "@/components/AddTodo";
 import TodoList from "@/components/TodoList";
+import CalendarView from "@/components/CalendarView";
 import MemberList from "@/components/MemberList";
+import OnlineUsers from "@/components/OnlineUsers";
 import InviteModal from "@/components/InviteModal";
+import ApplyTemplateModal from "@/components/ApplyTemplateModal";
+import EisenhowerMatrix from "@/components/EisenhowerMatrix";
+import PomodoroTimer from "@/components/PomodoroTimer";
+import KeyboardShortcuts from "@/components/KeyboardShortcuts";
+import CommandPalette from "@/components/CommandPalette";
+import { useTheme } from "@/context/ThemeContext";
+import { useReminders } from "@/hooks/useReminders";
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
   const workspaceId = params.id as string;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { showToast } = useToast();
+  const { toggleTheme } = useTheme();
   const supabase = createClient();
 
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
+  const [showApplyTemplate, setShowApplyTemplate] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [view, setView] = useState<"list" | "calendar" | "matrix">("list");
 
-  const { todos, loading: todosLoading, addTodo, updateTodo, deleteTodo, reorderTodos } =
+  const { todos, loading: todosLoading, addTodo, addSubtask, updateTodo, deleteTodo, reorderTodos, applyTemplate } =
     useRealtimeTodos(workspaceId);
+
+  useReminders(todos);
 
   const fetchWorkspace = useCallback(async () => {
     const { data } = await supabase
@@ -58,23 +77,103 @@ export default function WorkspaceDetailPage() {
     }
   }, [user, authLoading, router, fetchWorkspace, fetchMembers]);
 
+  async function handleAddTodo(title: string, description?: string, dueDate?: string, durationHours?: number) {
+    try {
+      await addTodo(title, description, dueDate, durationHours);
+      showToast("할 일이 추가되었습니다");
+    } catch {
+      showToast("할 일 추가에 실패했습니다", "error");
+    }
+  }
+
+  async function handleUpdateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "priority">>) {
+    try {
+      await updateTodo(id, updates);
+      if (updates.is_completed !== undefined) {
+        showToast(updates.is_completed ? "완료!" : "다시 열림");
+      }
+    } catch {
+      showToast("업데이트에 실패했습니다", "error");
+    }
+  }
+
+  async function handleDeleteTodo(id: string) {
+    try {
+      await deleteTodo(id);
+      showToast("삭제되었습니다");
+    } catch {
+      showToast("삭제에 실패했습니다", "error");
+    }
+  }
+
+  function handleCalendarAddTodo(title: string, dueDate: string) {
+    handleAddTodo(title, undefined, dueDate, 24);
+  }
+
+  function handleCommandAction(action: string) {
+    switch (action) {
+      case "add-todo":
+        document.getElementById("add-todo-input")?.focus();
+        break;
+      case "view-list":
+        setView("list");
+        break;
+      case "view-calendar":
+        setView("calendar");
+        break;
+      case "view-matrix":
+        setView("matrix");
+        break;
+      case "go-workspaces":
+        router.push("/workspace");
+        break;
+      case "go-settings":
+        router.push("/settings");
+        break;
+      case "go-khu":
+        router.push("/khu");
+        break;
+      case "go-budget":
+        router.push("/budget");
+        break;
+      case "toggle-theme":
+        toggleTheme();
+        break;
+    }
+  }
+
+  // Quick stats
+  const realTodos = todos.filter((t) => t.description !== SECTION_HEADER_MARKER);
+  const total = realTodos.length;
+  const completed = realTodos.filter((t) => t.is_completed).length;
+  const active = total - completed;
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const todayStr = toDateStr(nowKST());
+  const overdue = realTodos.filter(
+    (t) => !t.is_completed && t.due_date && toDateStr(parseLocalDate(t.due_date)) < todayStr
+  ).length;
+
   if (loading || authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#5856D6]/[0.07] via-[#f5f5f7] to-[#f5f5f7] dark:from-[#5856D6]/[0.12] dark:via-[#111827] dark:to-[#111827]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-7 w-7 animate-spin rounded-full border-[2.5px] border-[#007AFF] border-t-transparent" />
+          <span className="text-[13px] text-secondary">로딩 중...</span>
+        </div>
       </div>
     );
   }
 
   if (!workspace) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#5856D6]/[0.07] via-[#f5f5f7] to-[#f5f5f7] dark:from-[#5856D6]/[0.12] dark:via-[#111827] dark:to-[#111827]">
         <div className="text-center">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Workspace not found
+          <div className="mb-4 text-5xl">🔍</div>
+          <h2 className="text-[17px] font-semibold text-foreground dark:text-white">
+            워크스페이스를 찾을 수 없습니다
           </h2>
-          <Link href="/workspace" className="mt-2 text-sm text-blue-500 hover:text-blue-600">
-            Back to workspaces
+          <Link href="/workspace" className="mt-3 inline-block text-[13px] text-[#007AFF] hover:text-[#0056b3]">
+            ← 워크스페이스 목록으로
           </Link>
         </div>
       </div>
@@ -82,76 +181,215 @@ export default function WorkspaceDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="bg-gradient-to-b from-[#5856D6]/[0.07] via-[#f5f5f7] to-[#f5f5f7] dark:from-[#5856D6]/[0.12] dark:via-[#111827] dark:to-[#111827]">
       <Header />
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        {/* Workspace header */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+      <main className="mx-auto max-w-6xl px-4 pb-8 pt-6 sm:px-5 sm:pt-8">
+        {/* ── Top bar ── */}
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          {/* Left: title + breadcrumb */}
           <div>
-            <div className="flex items-center gap-2">
-              <Link
-                href="/workspace"
-                className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </Link>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {workspace.name}
-              </h1>
-            </div>
+            <Link
+              href="/workspace"
+              className="mb-1.5 inline-flex items-center gap-1 text-[12px] text-secondary hover:text-foreground dark:hover:text-white"
+            >
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              워크스페이스
+            </Link>
+            <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[28px] dark:text-white">
+              {workspace.name}
+            </h1>
             {workspace.description && (
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-[13px] text-secondary">
                 {workspace.description}
               </p>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right: actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <OnlineUsers workspaceId={workspaceId} />
             <MemberList
               workspaceId={workspaceId}
               members={members}
               onMembersChange={fetchMembers}
             />
             <button
-              onClick={() => setShowInvite(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-600"
+              onClick={() => setShowApplyTemplate(true)}
+              className="rounded-xl bg-black/[0.05] p-2.5 text-secondary transition-colors hover:bg-black/[0.08] hover:text-foreground dark:bg-white/[0.1] dark:hover:bg-white/[0.15] dark:hover:text-white"
+              title="템플릿"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
               </svg>
-              Invite
             </button>
+            {members.some((m) => m.user_id === user?.id && (m.role === "owner" || m.role === "admin")) && (
+              <button
+                onClick={() => setShowInvite(true)}
+                className="rounded-full bg-[#007AFF] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#0056b3]"
+              >
+                초대
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Add todo */}
-        <AddTodo onAdd={addTodo} />
+        {/* ── Stats ribbon ── */}
+        {total > 0 && (
+          <div className="card-surface mb-6 flex flex-wrap items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
+            {/* Progress ring */}
+            <div className="relative flex-shrink-0">
+              <svg className="h-10 w-10 -rotate-90 sm:h-12 sm:w-12" viewBox="0 0 36 36">
+                <circle cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3" className="text-black/[0.06] dark:text-white/[0.1]" />
+                <circle
+                  cx="18" cy="18" r="15.5" fill="none" stroke="currentColor" strokeWidth="3"
+                  strokeDasharray={`${percentage} ${100 - percentage}`}
+                  strokeLinecap="round"
+                  className="text-[#007AFF]"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground dark:text-white">
+                {percentage}%
+              </span>
+            </div>
 
-        {/* Todo list */}
-        {todosLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-[11px] sm:gap-3 sm:text-[12px]">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#007AFF]" />
+                <span className="font-medium text-foreground dark:text-[#e5e5e7]">{active} 진행</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="font-medium text-foreground dark:text-[#e5e5e7]">{completed} 완료</span>
+              </div>
+              {overdue > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  <span className="font-medium text-red-600 dark:text-red-400">{overdue} 지연</span>
+                </div>
+              )}
+            </div>
+
+            {/* View toggle */}
+            <div className="flex w-full flex-shrink-0 rounded-xl bg-[#f5f5f7] p-1 sm:w-auto dark:bg-white/[0.06]">
+              <button
+                onClick={() => setView("list")}
+                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
+                  view === "list"
+                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-secondary hover:text-foreground dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+                목록
+              </button>
+              <button
+                onClick={() => setView("calendar")}
+                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
+                  view === "calendar"
+                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-secondary hover:text-foreground dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                캘린더
+              </button>
+              <button
+                onClick={() => setView("matrix")}
+                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
+                  view === "matrix"
+                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
+                    : "text-secondary hover:text-foreground dark:hover:text-white"
+                }`}
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+                매트릭스
+              </button>
+            </div>
           </div>
-        ) : (
-          <TodoList
+        )}
+
+        {/* ── Content area ── */}
+        {todosLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-[#007AFF] border-t-transparent" />
+          </div>
+        ) : view === "list" ? (
+          <div>
+            <AddTodo onAdd={handleAddTodo} />
+            <TodoList
+              todos={todos}
+              members={members}
+              isTeam={members.length > 1}
+              onUpdate={handleUpdateTodo}
+              onDelete={handleDeleteTodo}
+              onReorder={reorderTodos}
+              onAddSubtask={addSubtask}
+            />
+          </div>
+        ) : view === "calendar" ? (
+          <CalendarView
             todos={todos}
-            members={members}
-            onUpdate={updateTodo}
-            onDelete={deleteTodo}
-            onReorder={reorderTodos}
+            onTodoClick={(todo) => handleUpdateTodo(todo.id, { is_completed: !todo.is_completed })}
+            onUpdateTodo={(id, updates) => handleUpdateTodo(id, updates)}
+            onDeleteTodo={handleDeleteTodo}
+            onAddTodo={handleCalendarAddTodo}
+          />
+        ) : (
+          <EisenhowerMatrix
+            todos={todos}
+            onUpdate={handleUpdateTodo}
+            onDelete={handleDeleteTodo}
           />
         )}
 
-        {/* Invite modal */}
-        {showInvite && workspace.invite_code && (
-          <InviteModal
-            inviteCode={workspace.invite_code}
-            onClose={() => setShowInvite(false)}
-          />
+        {/* Empty state */}
+        {!todosLoading && total === 0 && (
+          <div className="mt-4 flex flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-black/[0.08] py-16 dark:border-white/[0.08]">
+            <div className="mb-3 text-4xl opacity-50">📝</div>
+            <p className="text-[15px] font-medium text-foreground dark:text-white">
+              아직 할 일이 없습니다
+            </p>
+            <p className="mt-1 text-[13px] text-secondary">
+              위에서 할 일을 추가하거나 템플릿을 적용해보세요
+            </p>
+          </div>
         )}
       </main>
+
+      {/* Modals */}
+      {showInvite && workspace.invite_code && (
+        <InviteModal
+          workspaceId={workspaceId}
+          workspaceName={workspace.name}
+          inviteCode={workspace.invite_code}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
+      {showApplyTemplate && (
+        <ApplyTemplateModal
+          onApply={applyTemplate}
+          onClose={() => setShowApplyTemplate(false)}
+        />
+      )}
+
+      {/* Keyboard shortcuts & Command palette */}
+      <KeyboardShortcuts onOpenCommandPalette={() => setShowCommandPalette((prev) => !prev)} />
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onAction={handleCommandAction}
+      />
+
+      <PomodoroTimer />
     </div>
   );
 }

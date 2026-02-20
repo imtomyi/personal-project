@@ -5,30 +5,49 @@
 :root {
   --background: #f9fafb;
   --foreground: #111827;
+  --text-secondary: #86868b;
+  --surface: #ffffff;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.04), 0 4px 24px rgba(0,0,0,0.03);
+  --radius-card: 20px;
 }
 
 .dark {
   --background: #111827;
   --foreground: #f9fafb;
+  --text-secondary: #98989d;
+  --surface: #1c1c1e;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 4px 24px rgba(0,0,0,0.2);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-secondary: var(--text-secondary);
+}
+
+.card-surface {
+  border-radius: var(--radius-card);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
-/* Smooth transitions for dark mode */
+/* Apple-style smooth transitions */
 * {
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 0.25s;
+  transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* Scrollbar styling */
+/* Scrollbar — minimal */
 ::-webkit-scrollbar {
   width: 6px;
 }
@@ -38,10 +57,69 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: #4b5563;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Toast animation */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* ── PWA / Mobile ── */
+
+/* Safe area padding for iOS notch/home indicator */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Standalone mode (installed PWA) adjustments */
+@media (display-mode: standalone) {
+  /* Extra top padding for status bar */
+  header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* Prevent text selection / callout on touch hold */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    /* Disable pull-to-refresh on iOS */
+    overscroll-behavior-y: contain;
+  }
+
+  /* Re-enable selection for inputs and textareas */
+  input, textarea, [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* Prevent iOS double-tap zoom */
+* {
+  touch-action: manipulation;
+}
+
+/* Smooth momentum scrolling for iOS */
+.overflow-y-auto, .overflow-x-auto, .overflow-auto {
+  -webkit-overflow-scrolling: touch;
 }

@@ -1,0 +1,375 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
+import type { DdayEntry } from "@/lib/workspace-widgets";
+import { DDAY_STORAGE_KEY } from "@/lib/workspace-widgets";
+import { todayKST, parseLocalDate, toDateStr } from "@/lib/date";
+import { DDAY_COLOR_OPTIONS, DDAY_EMOJI_OPTIONS, WEEKDAY_LABELS } from "@/lib/constants";
+
+const COLOR_OPTIONS = DDAY_COLOR_OPTIONS;
+const EMOJI_OPTIONS = DDAY_EMOJI_OPTIONS;
+
+function loadData(): DdayEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(DDAY_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveData(data: DdayEntry[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DDAY_STORAGE_KEY, JSON.stringify(data));
+  // 같은 탭 내 다른 컴포넌트에 변경 알림 (비동기로 dispatch하여 렌더 중 setState 방지)
+  setTimeout(() => window.dispatchEvent(new Event("dday-updated")), 0);
+}
+
+function getDaysUntil(targetDate: string): number {
+  const today = parseLocalDate(todayKST());
+  const target = parseLocalDate(targetDate);
+  const diffTime = target.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+function formatDday(days: number): string {
+  if (days === 0) return "D-DAY";
+  if (days > 0) return `D-${days}`;
+  return `D+${Math.abs(days)}`;
+}
+
+/* ==========================================
+   미니 캘린더 (날짜 선택용)
+   ========================================== */
+function MiniCalendar({
+  selected,
+  onSelect,
+  accentColor,
+}: {
+  selected: string; // "YYYY-MM-DD" or ""
+  onSelect: (dateStr: string) => void;
+  accentColor: string; // COLOR_OPTIONS value
+}) {
+  const todayStr = todayKST();
+  const initial = selected || todayStr;
+  const [viewYear, setViewYear] = useState(() => parseInt(initial.split("-")[0]));
+  const [viewMonth, setViewMonth] = useState(() => parseInt(initial.split("-")[1]) - 1);
+
+  const colorInfo = COLOR_OPTIONS.find((c) => c.value === accentColor) || COLOR_OPTIONS[0];
+
+  const weeks = useMemo(() => {
+    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    const result: (string | null)[][] = [];
+    let week: (string | null)[] = [];
+
+    for (let i = 0; i < firstDay; i++) week.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      week.push(ds);
+      if (week.length === 7) { result.push(week); week = []; }
+    }
+    if (week.length > 0) {
+      while (week.length < 7) week.push(null);
+      result.push(week);
+    }
+    return result;
+  }, [viewYear, viewMonth]);
+
+  const monthLabel = `${viewYear}년 ${viewMonth + 1}월`;
+
+  function prev() {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
+    else setViewMonth((m) => m - 1);
+  }
+  function next() {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
+    else setViewMonth((m) => m + 1);
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-600 dark:bg-gray-700">
+      {/* 월 네비게이션 */}
+      <div className="mb-1.5 flex items-center justify-between">
+        <button onClick={prev} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{monthLabel}</span>
+        <button onClick={next} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300">
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* 요일 헤더 */}
+      <div className="mb-0.5 grid grid-cols-7 text-center">
+        {WEEKDAY_LABELS.map((d, i) => (
+          <span
+            key={d}
+            className={`text-[9px] font-medium ${
+              i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-gray-400 dark:text-gray-500"
+            }`}
+          >
+            {d}
+          </span>
+        ))}
+      </div>
+
+      {/* 날짜 그리드 */}
+      {weeks.map((week, wi) => (
+        <div key={wi} className="grid grid-cols-7">
+          {week.map((ds, di) => {
+            if (!ds) return <div key={`e-${wi}-${di}`} className="h-6" />;
+            const day = parseInt(ds.split("-")[2]);
+            const isToday = ds === todayStr;
+            const isSelected = ds === selected;
+            const colIdx = di;
+
+            return (
+              <button
+                key={ds}
+                type="button"
+                onClick={() => onSelect(ds)}
+                className={`flex h-6 w-full items-center justify-center rounded-md text-[10px] font-medium transition-all ${
+                  isSelected
+                    ? `${colorInfo.bg} text-white font-bold`
+                    : isToday
+                      ? "bg-blue-50 font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                      : colIdx === 0
+                        ? "text-red-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        : colIdx === 6
+                          ? "text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          : "text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-600"
+                }`}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ==========================================
+   DdayWidget 메인
+   ========================================== */
+export default function DdayWidget() {
+  const [entries, setEntries] = useState<DdayEntry[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newEmoji, setNewEmoji] = useState("📌");
+  const [newColor, setNewColor] = useState("blue");
+
+  useEffect(() => {
+    setEntries(loadData());
+  }, []);
+
+  const addEntry = useCallback(() => {
+    if (!newTitle.trim() || !newDate) return;
+    const entry: DdayEntry = {
+      id: crypto.randomUUID(),
+      title: newTitle.trim(),
+      date: newDate,
+      emoji: newEmoji,
+      color: newColor,
+    };
+    setEntries((prev) => {
+      const updated = [...prev, entry].sort((a, b) => {
+        const da = getDaysUntil(a.date);
+        const db = getDaysUntil(b.date);
+        if (da >= 0 && db >= 0) return da - db;
+        if (da < 0 && db < 0) return da - db;
+        return da >= 0 ? -1 : 1;
+      });
+      saveData(updated);
+      return updated;
+    });
+    setNewTitle("");
+    setNewDate("");
+    setNewEmoji("📌");
+    setNewColor("blue");
+    setShowAdd(false);
+  }, [newTitle, newDate, newEmoji, newColor]);
+
+  const removeEntry = useCallback((id: string) => {
+    setEntries((prev) => {
+      const updated = prev.filter((e) => e.id !== id);
+      saveData(updated);
+      return updated;
+    });
+  }, []);
+
+  // Sort entries: upcoming first, then past
+  const sortedEntries = [...entries].sort((a, b) => {
+    const da = getDaysUntil(a.date);
+    const db = getDaysUntil(b.date);
+    if (da >= 0 && db >= 0) return da - db;
+    if (da < 0 && db < 0) return db - da;
+    return da >= 0 ? -1 : 1;
+  });
+
+  return (
+    <div className="card-surface p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
+          📌 디데이
+        </h3>
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">
+          {entries.length}개
+        </span>
+      </div>
+
+      {/* D-day entries */}
+      {sortedEntries.length > 0 ? (
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          {sortedEntries.map((entry) => {
+            const days = getDaysUntil(entry.date);
+            const colorInfo = COLOR_OPTIONS.find((c) => c.value === entry.color) || COLOR_OPTIONS[0];
+            const isPast = days < 0;
+            const isToday = days === 0;
+
+            return (
+              <div
+                key={entry.id}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${colorInfo.light}`}
+              >
+                <span className="text-lg">{entry.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-xs font-semibold ${colorInfo.text}`}>
+                    {entry.title}
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                    {entry.date.replace(/-/g, ".")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
+                    isToday
+                      ? `${colorInfo.bg} text-white`
+                      : isPast
+                        ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                        : `${colorInfo.text} font-bold`
+                  }`}>
+                    {formatDday(days)}
+                  </span>
+                  <button
+                    onClick={() => removeEntry(entry.id)}
+                    className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 dark:text-gray-600"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mb-3 flex flex-col items-center py-4 text-center">
+          <span className="mb-1 text-2xl opacity-40">📌</span>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
+            중요한 날을 추가해보세요
+          </p>
+        </div>
+      )}
+
+      {/* Add form */}
+      {showAdd ? (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/50">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="제목 (예: 기말고사, 졸업식)"
+            className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === "Escape") setShowAdd(false); }}
+          />
+
+          {/* 커스텀 미니 캘린더 */}
+          <div className="mb-2">
+            {newDate && (
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                  선택: {newDate.replace(/-/g, ".")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNewDate("")}
+                  className="text-[10px] text-gray-400 hover:text-red-500"
+                >
+                  초기화
+                </button>
+              </div>
+            )}
+            <MiniCalendar
+              selected={newDate}
+              onSelect={setNewDate}
+              accentColor={newColor}
+            />
+          </div>
+
+          {/* Emoji picker */}
+          <div className="mb-2 flex flex-wrap gap-1">
+            {EMOJI_OPTIONS.map((e) => (
+              <button
+                key={e}
+                onClick={() => setNewEmoji(e)}
+                className={`rounded-md px-1.5 py-0.5 text-sm transition-colors ${
+                  newEmoji === e
+                    ? "bg-blue-100 ring-1 ring-blue-400 dark:bg-blue-900/30"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-600"
+                }`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+
+          {/* Color picker */}
+          <div className="mb-3 flex gap-1.5">
+            {COLOR_OPTIONS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => setNewColor(c.value)}
+                className={`h-5 w-5 rounded-full ${c.bg} transition-transform ${
+                  newColor === c.value ? "scale-125 ring-2 ring-offset-1 ring-gray-400" : "hover:scale-110"
+                }`}
+                title={c.label}
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setShowAdd(false)} className="px-3 py-1 text-[11px] text-gray-400 hover:text-gray-600">취소</button>
+            <button
+              onClick={addEntry}
+              disabled={!newTitle.trim() || !newDate}
+              className="rounded-lg bg-blue-500 px-4 py-1 text-[11px] font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+            >
+              추가
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-gray-200 py-1.5 text-[10px] font-medium text-gray-400 transition-colors hover:border-blue-300 hover:text-blue-500 dark:border-gray-600 dark:hover:border-blue-600"
+        >
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          디데이 추가
+        </button>
+      )}
+    </div>
+  );
+}

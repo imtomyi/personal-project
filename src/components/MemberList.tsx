@@ -24,11 +24,16 @@ export default function MemberList({
   const canManage = currentUserRole === "owner" || currentUserRole === "admin";
 
   async function handleRemoveMember(memberId: string) {
+    // 낙관적 업데이트: UI에서 먼저 제거
+    onMembersChange();
+
     const { error } = await supabase
       .from("members")
       .delete()
       .eq("id", memberId);
-    if (!error) onMembersChange();
+    if (error) {
+      onMembersChange();
+    }
   }
 
   if (!isOpen) {

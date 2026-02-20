@@ -1,0 +1,28 @@
+{
+  "name": "Collab Todo",
+  "short_name": "Collab Todo",
+  "description": "실시간 협업 할 일 관리 앱",
+  "start_url": "/workspace",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#5856D6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
