@@ -202,6 +202,34 @@ export function useDailyPlan(dateStr?: string) {
     }
   }
 
+  // 시간표 새로고침 — 모든 활성 plan의 시간 배정을 초기화하여 재배치 트리거
+  async function refreshSchedule() {
+    const active = plans.filter((p) => !p.is_skipped && p.estimated_minutes > 0);
+    if (active.length === 0) return;
+
+    // Optimistic: 모든 scheduled_start_min/end_min → null
+    setPlans((prev) =>
+      prev.map((p) =>
+        !p.is_skipped && p.estimated_minutes > 0
+          ? { ...p, scheduled_start_min: null, scheduled_end_min: null }
+          : p,
+      ),
+    );
+
+    // DB 일괄 업데이트
+    const ids = active.map((p) => p.id);
+    await supabase
+      .from("daily_plans")
+      .update({
+        scheduled_start_min: null,
+        scheduled_end_min: null,
+        updated_at: new Date().toISOString(),
+      })
+      .in("id", ids);
+
+    await fetchPlans();
+  }
+
   // 활성 계획 (스킵 제외)
   const activePlans = useMemo(
     () => plans.filter((p) => !p.is_skipped && p.estimated_minutes > 0),
@@ -225,6 +253,7 @@ export function useDailyPlan(dateStr?: string) {
     updateSchedule,
     batchUpdateSchedules,
     removePlan,
+    refreshSchedule,
     refetch: fetchPlans,
   };
 }

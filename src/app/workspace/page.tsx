@@ -60,6 +60,7 @@ export default function WorkspacesPage() {
     addPlanBatch,
     skipTodo,
     updateSchedule: updateDailySchedule,
+    refreshSchedule,
   } = useDailyPlan();
   const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
   const { tasks: allRecurringTasks } = useRecurringTasks();
@@ -788,6 +789,7 @@ export default function WorkspacesPage() {
               onOpenTriage={() => setShowTriage(true)}
               onScheduleUpdate={updateDailySchedule}
               onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
+              onRefreshSchedule={refreshSchedule}
               workspaceMap={workspaceMap}
             />
           </div>

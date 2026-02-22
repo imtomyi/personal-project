@@ -30,6 +30,7 @@ type DailyScheduleProps = {
   onOpenTriage?: () => void;
   onScheduleUpdate?: (planId: string, startMin: number, endMin: number) => Promise<void>;
   onAutoDistributeTodayTasks?: (todos: Todo[]) => Promise<void>;
+  onRefreshSchedule?: () => Promise<void>;
   workspaceMap?: Map<string, { name: string; color: string }>;
 };
 
@@ -171,8 +172,10 @@ export default function DailySchedule({
   onOpenTriage,
   onScheduleUpdate,
   onAutoDistributeTodayTasks,
+  onRefreshSchedule,
   workspaceMap,
 }: DailyScheduleProps) {
+  const [refreshing, setRefreshing] = useState(false);
   const HOUR_HEIGHT = compact ? 30 : 48;
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
@@ -423,6 +426,33 @@ export default function DailySchedule({
                   className="rounded-xl bg-emerald-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-emerald-600"
                 >
                   📅 오늘 할 일 배치 ({todayDueTodos.length})
+                </button>
+              )}
+              {hasActivePlans && onRefreshSchedule && (
+                <button
+                  onClick={async () => {
+                    setRefreshing(true);
+                    try {
+                      await onRefreshSchedule();
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  disabled={refreshing}
+                  className="rounded-xl bg-amber-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+                  title="시간표를 재배치합니다"
+                >
+                  {refreshing ? (
+                    <span className="flex items-center gap-1">
+                      <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      재배치 중...
+                    </span>
+                  ) : (
+                    "🔄 시간표 새로고침"
+                  )}
                 </button>
               )}
               {!hasActivePlans && (
