@@ -49,6 +49,40 @@ const SCHEDULE_START = 6 * 60; // 06:00
 const SCHEDULE_END = 24 * 60; // 24:00
 
 // ============================================
+// 집중 가능 시간대 가중치
+// ============================================
+
+/**
+ * 시간대별 집중 가능 확률 점수 (0~100).
+ * 높을수록 해당 시간에 할 일을 우선 배치.
+ *
+ * 구간:
+ *   06:00-08:00  →  15  (기상/준비, 대부분 수면 중)
+ *   08:00-09:00  →  40  (출근/통학, 아침)
+ *   09:00-12:00  → 100  (오전 골든타임)
+ *   12:00-13:00  →  25  (점심시간)
+ *   13:00-14:00  →  55  (점심 후 적응)
+ *   14:00-17:00  →  90  (오후 집중시간)
+ *   17:00-18:00  →  70  (오후 후반)
+ *   18:00-19:30  →  30  (저녁시간)
+ *   19:30-22:00  →  75  (야간 집중시간)
+ *   22:00-24:00  →  20  (취침 준비)
+ */
+function getFocusScore(minuteOfDay: number): number {
+  const h = minuteOfDay / 60;
+  if (h < 8) return 15;
+  if (h < 9) return 40;
+  if (h < 12) return 100;
+  if (h < 13) return 25;
+  if (h < 14) return 55;
+  if (h < 17) return 90;
+  if (h < 18) return 70;
+  if (h < 19.5) return 30;
+  if (h < 22) return 75;
+  return 20;
+}
+
+// ============================================
 // Free Slots Helper
 // ============================================
 
@@ -73,6 +107,43 @@ export function findFreeSlots(
   }
 
   return freeSlots;
+}
+
+/**
+ * 빈 슬롯을 집중 가능 시간대 점수 기준으로 정렬.
+ * 같은 점수대면 시간순 유지.
+ */
+export function findFreeSlotsRanked(
+  existingBlocks: ScheduleBlock[],
+): { start: number; end: number }[] {
+  const raw = findFreeSlots(existingBlocks);
+
+  // 큰 슬롯을 30분 단위 서브슬롯으로 분할해서 시간대별로 정확하게 점수 매기기
+  const subSlots: { start: number; end: number; score: number }[] = [];
+  for (const slot of raw) {
+    let cursor = slot.start;
+    while (cursor < slot.end) {
+      // 같은 집중 점수 구간이 이어지는 끝 지점 찾기
+      const currentScore = getFocusScore(cursor);
+      let segEnd = cursor;
+      while (segEnd < slot.end && getFocusScore(segEnd) === currentScore) {
+        segEnd += 15;
+      }
+      segEnd = Math.min(segEnd, slot.end);
+      if (segEnd > cursor) {
+        subSlots.push({ start: cursor, end: segEnd, score: currentScore });
+      }
+      cursor = segEnd;
+    }
+  }
+
+  // 집중 점수 높은 순 → 같으면 시간순
+  subSlots.sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    return a.start - b.start;
+  });
+
+  return subSlots.map(({ start, end }) => ({ start, end }));
 }
 
 // ============================================
@@ -177,48 +248,47 @@ export function generateStudyBlocks(
   const MIN_BLOCK_MINUTES = 30;
   const MAX_BLOCK_MINUTES = 90;
 
-  const freeSlots = findFreeSlots(existingBlocks);
   const studyBlocks: ScheduleBlock[] = [];
-  let slotIdx = 0;
-  let slotCursor = freeSlots[0]?.start ?? SCHEDULE_END;
+  const tempBlocks = [...existingBlocks];
 
   for (const plan of studyPlans) {
     let remainingMin = Math.round(plan.hoursPerDay * 60);
 
-    while (remainingMin >= MIN_BLOCK_MINUTES && slotIdx < freeSlots.length) {
-      const slot = freeSlots[slotIdx];
-      const availableMin = slot.end - slotCursor;
+    while (remainingMin >= MIN_BLOCK_MINUTES) {
+      // 매번 현재 블록 상태 기준으로 집중 시간대 우선 빈 슬롯 탐색
+      tempBlocks.sort((a, b) => a.startMin - b.startMin);
+      const rankedSlots = findFreeSlotsRanked(tempBlocks);
 
-      if (availableMin < MIN_BLOCK_MINUTES) {
-        slotIdx++;
-        slotCursor = freeSlots[slotIdx]?.start ?? SCHEDULE_END;
-        continue;
+      let placed = false;
+      for (const slot of rankedSlots) {
+        const availableMin = slot.end - slot.start;
+        if (availableMin < MIN_BLOCK_MINUTES) continue;
+
+        const blockMin = Math.min(
+          remainingMin,
+          availableMin,
+          MAX_BLOCK_MINUTES,
+        );
+
+        const block: ScheduleBlock = {
+          id: `study-${plan.assignmentId}-${slot.start}`,
+          title: plan.assignmentTitle,
+          startMin: slot.start,
+          endMin: slot.start + blockMin,
+          type: "study",
+          color: plan.assignmentType === "exam" ? "rose" : "amber",
+          assignmentId: plan.assignmentId,
+          courseName: plan.courseName,
+        };
+
+        studyBlocks.push(block);
+        tempBlocks.push(block);
+        remainingMin -= blockMin;
+        placed = true;
+        break;
       }
 
-      const blockMin = Math.min(
-        remainingMin,
-        availableMin,
-        MAX_BLOCK_MINUTES,
-      );
-
-      studyBlocks.push({
-        id: `study-${plan.assignmentId}-${slotCursor}`,
-        title: plan.assignmentTitle,
-        startMin: slotCursor,
-        endMin: slotCursor + blockMin,
-        type: "study",
-        color: plan.assignmentType === "exam" ? "rose" : "amber",
-        assignmentId: plan.assignmentId,
-        courseName: plan.courseName,
-      });
-
-      slotCursor += blockMin;
-      remainingMin -= blockMin;
-
-      if (slotCursor >= slot.end) {
-        slotIdx++;
-        slotCursor = freeSlots[slotIdx]?.start ?? SCHEDULE_END;
-      }
+      if (!placed) break; // 더 이상 빈 공간 없음
     }
   }
 
@@ -350,9 +420,7 @@ export function autoAssignTodos(
     allBlocks.sort((a, b) => a.startMin - b.startMin);
   }
 
-  // Phase 2: 남은 빈 시간에 일반 할일 배치 (우선순위 기반)
-  const freeSlots = findFreeSlots(allBlocks);
-
+  // Phase 2: 남은 빈 시간에 일반 할일 배치 (집중 시간대 우선)
   const uncompletedTodos = todos
     .filter(
       (t) =>
@@ -371,26 +439,24 @@ export function autoAssignTodos(
       return 0;
     });
 
-  let todoIdx = 0;
-
-  for (const slot of freeSlots) {
-    let slotCursor = slot.start;
-    while (
-      slotCursor + SLOT_DURATION <= slot.end &&
-      todoIdx < uncompletedTodos.length
-    ) {
-      const todo = uncompletedTodos[todoIdx];
+  for (const todo of uncompletedTodos) {
+    allBlocks.sort((a, b) => a.startMin - b.startMin);
+    const rankedSlots = findFreeSlotsRanked(allBlocks);
+    let placed = false;
+    for (const slot of rankedSlots) {
+      if (slot.end - slot.start < SLOT_DURATION) continue;
       allBlocks.push({
         id: `todo-${todo.id}`,
         title: todo.title,
-        startMin: slotCursor,
-        endMin: slotCursor + SLOT_DURATION,
+        startMin: slot.start,
+        endMin: slot.start + SLOT_DURATION,
         type: "todo",
         todoId: todo.id,
       });
-      slotCursor += SLOT_DURATION;
-      todoIdx++;
+      placed = true;
+      break;
     }
+    if (!placed) break; // 더 이상 빈 공간 없음
   }
 
   allBlocks.sort((a, b) => a.startMin - b.startMin);
@@ -444,32 +510,25 @@ export function autoAssignDailyPlans(
     });
   }
 
-  // 미배치 계획을 빈 슬롯에 배치
+  // 미배치 계획을 집중 가능 시간대 우선으로 배치
   if (unscheduled.length > 0) {
-    allBlocks.sort((a, b) => a.startMin - b.startMin);
-    const freeSlots = findFreeSlots(allBlocks);
-    let slotIdx = 0;
-    let slotCursor = freeSlots[0]?.start ?? SCHEDULE_END;
-
     for (const plan of unscheduled.sort((a, b) => a.sort_order - b.sort_order)) {
       const todo = todos.find((t) => t.id === plan.todo_id);
       if (!todo) continue;
 
       const neededMin = plan.estimated_minutes;
+
+      // 현재 블록 기준으로 집중 점수 높은 빈 슬롯 탐색
+      allBlocks.sort((a, b) => a.startMin - b.startMin);
+      const rankedSlots = findFreeSlotsRanked(allBlocks);
+
       let placed = false;
+      for (const slot of rankedSlots) {
+        const availableMin = slot.end - slot.start;
+        if (availableMin < neededMin) continue;
 
-      while (slotIdx < freeSlots.length) {
-        const slot = freeSlots[slotIdx];
-        const availableMin = slot.end - slotCursor;
-
-        if (availableMin < neededMin) {
-          slotIdx++;
-          slotCursor = freeSlots[slotIdx]?.start ?? SCHEDULE_END;
-          continue;
-        }
-
-        const startMin = slotCursor;
-        const endMin = slotCursor + neededMin;
+        const startMin = slot.start;
+        const endMin = startMin + neededMin;
 
         allBlocks.push({
           id: `plan-${plan.id}`,
@@ -482,12 +541,6 @@ export function autoAssignDailyPlans(
         });
 
         scheduleUpdates.push({ id: plan.id, startMin, endMin });
-
-        slotCursor = endMin;
-        if (slotCursor >= slot.end) {
-          slotIdx++;
-          slotCursor = freeSlots[slotIdx]?.start ?? SCHEDULE_END;
-        }
         placed = true;
         break;
       }
