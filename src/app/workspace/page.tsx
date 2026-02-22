@@ -730,19 +730,59 @@ export default function WorkspacesPage() {
           </div>
         </div>
 
-        {/* ── 통합 시간표 (캘린더 아래) ── */}
-        <div className="mt-8">
-          <DailySchedule
-            todos={todos}
-            recurringTasks={allRecurringTasks}
-            onUpdate={handleScheduleUpdateTodo}
-            habits={habitsWithTime}
-            dailyPlans={dailyPlans}
-            onOpenTriage={() => setShowTriage(true)}
-            onScheduleUpdate={updateDailySchedule}
-            onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
-            workspaceMap={workspaceMap}
-          />
+        {/* ── 통합 시간표 + 위젯 (2열 레이아웃) ── */}
+        <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* 시간표 — 왼쪽 (고정 너비) */}
+          <div className="w-full lg:w-[480px] lg:flex-shrink-0">
+            <DailySchedule
+              todos={todos}
+              recurringTasks={allRecurringTasks}
+              onUpdate={handleScheduleUpdateTodo}
+              habits={habitsWithTime}
+              dailyPlans={dailyPlans}
+              onOpenTriage={() => setShowTriage(true)}
+              onScheduleUpdate={updateDailySchedule}
+              onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
+              workspaceMap={workspaceMap}
+            />
+          </div>
+
+          {/* 위젯 — 오른쪽 (나머지 공간) */}
+          {visibleWidgets.length > 0 && (
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={visibleWidgets.map((w) => w.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="grid gap-4 sm:grid-cols-1 xl:grid-cols-2">
+                      {visibleWidgets.map((w) => (
+                        <SortableWsWidget
+                          key={w.id}
+                          id={w.id}
+                          isEditing={true}
+                          onRemove={toggleWidget}
+                        >
+                          {renderWidget(w.id)}
+                        </SortableWsWidget>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-1 xl:grid-cols-2">
+                  {visibleWidgets.map((w) => (
+                    <div key={w.id}>{renderWidget(w.id)}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 트리아지 모달 */}
@@ -755,43 +795,6 @@ export default function WorkspacesPage() {
             onComplete={() => {}}
             onClose={() => setShowTriage(false)}
           />
-        )}
-
-        {/* ── 위젯 영역 (전체 폭 2열 그리드) ── */}
-        {visibleWidgets.length > 0 && (
-          <div className="mt-8">
-            {isEditing ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={visibleWidgets.map((w) => w.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="grid gap-6 sm:grid-cols-2">
-                    {visibleWidgets.map((w) => (
-                      <SortableWsWidget
-                        key={w.id}
-                        id={w.id}
-                        isEditing={true}
-                        onRemove={toggleWidget}
-                      >
-                        {renderWidget(w.id)}
-                      </SortableWsWidget>
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2">
-                {visibleWidgets.map((w) => (
-                  <div key={w.id}>{renderWidget(w.id)}</div>
-                ))}
-              </div>
-            )}
-          </div>
         )}
 
         {/* ── 하단: 통계 대시보드 + 주간 리뷰 ── */}

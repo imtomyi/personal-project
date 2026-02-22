@@ -486,9 +486,8 @@ export default function DailySchedule({
 
         <div
           className={`relative ${
-            compact ? "overflow-hidden rounded-lg" : "card-surface overflow-y-auto p-0"
+            compact ? "overflow-hidden rounded-lg" : "card-surface overflow-hidden p-0"
           }`}
-          style={compact ? undefined : { maxWidth: "600px", maxHeight: "480px" }}
         >
           <div
             ref={timelineRef}
