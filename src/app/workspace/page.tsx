@@ -66,7 +66,6 @@ export default function WorkspacesPage() {
   const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
   const { habitsWithTime } = useHabits();
   const [showTriage, setShowTriage] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const todayStr = todayKST();
 
   // ── 오늘 디데이 항목 필터 (시간표 연동) ──
@@ -664,10 +663,10 @@ export default function WorkspacesPage() {
           </div>
         )}
 
-        {/* Side-by-side layout: Calendar (left) + Sidebar (right) */}
+        {/* Side-by-side layout: Calendar + Schedule (left) + Sidebar (right) */}
         <div className="flex flex-col gap-8 lg:flex-row">
-          {/* Calendar */}
-          <div className="min-w-0 flex-1">
+          {/* Calendar + 오늘 시간표 */}
+          <div className="min-w-0 flex-1 space-y-6">
             <WorkspaceCalendar
               todos={mergedTodos}
               workspaces={workspaces}
@@ -679,7 +678,21 @@ export default function WorkspacesPage() {
               recurringTasks={allRecurringTasks}
               onDeleteRecurringTask={handleDeleteRecurringTask}
               onOpenRoutineManager={() => setShowRoutineManager(true)}
-              onOpenSchedule={() => setShowScheduleModal(true)}
+            />
+            <DailySchedule
+              todos={todos}
+              recurringTasks={allRecurringTasks}
+              onUpdate={handleScheduleUpdateTodo}
+              habits={habitsWithTime}
+              dailyPlans={dailyPlans}
+              onOpenTriage={() => setShowTriage(true)}
+              onScheduleUpdate={updateDailySchedule}
+              onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
+              onRefreshSchedule={refreshSchedule}
+              workspaceMap={workspaceMap}
+              ddayEntries={todayDdayEntries}
+              onDeleteRecurringTask={handleDeleteRecurringTask}
+              onOpenRoutineManager={() => setShowRoutineManager(true)}
             />
           </div>
 
@@ -807,28 +820,8 @@ export default function WorkspacesPage() {
           </div>
         </div>
 
-        {/* ── 통합 시간표 + 위젯 (2열 레이아웃) ── */}
-        <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:items-start">
-          {/* 시간표 — 왼쪽 (고정 너비) */}
-          <div className="w-full lg:w-[480px] lg:flex-shrink-0">
-            <DailySchedule
-              todos={todos}
-              recurringTasks={allRecurringTasks}
-              onUpdate={handleScheduleUpdateTodo}
-              habits={habitsWithTime}
-              dailyPlans={dailyPlans}
-              onOpenTriage={() => setShowTriage(true)}
-              onScheduleUpdate={updateDailySchedule}
-              onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
-              onRefreshSchedule={refreshSchedule}
-              workspaceMap={workspaceMap}
-              ddayEntries={todayDdayEntries}
-              onDeleteRecurringTask={handleDeleteRecurringTask}
-              onOpenRoutineManager={() => setShowRoutineManager(true)}
-            />
-          </div>
-
-          {/* 위젯 — 오른쪽 (나머지 공간) */}
+        {/* ── 위젯 ── */}
+        <div className="mt-8">
           {visibleWidgets.length > 0 && (
             <div className="flex-1 min-w-0">
               {isEditing ? (
@@ -876,50 +869,6 @@ export default function WorkspacesPage() {
             onComplete={() => {}}
             onClose={() => setShowTriage(false)}
           />
-        )}
-
-        {/* 시간표 모달 */}
-        {showScheduleModal && (
-          <div
-            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/40 px-4 pt-[5vh] pb-[5vh] backdrop-blur-sm"
-            onClick={() => setShowScheduleModal(false)}
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3 dark:border-gray-700">
-                <h3 className="text-[15px] font-semibold text-foreground dark:text-white">
-                  📋 오늘 시간표
-                </h3>
-                <button
-                  onClick={() => setShowScheduleModal(false)}
-                  className="rounded-full p-1.5 text-secondary hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.08] dark:hover:text-white"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-4">
-                <DailySchedule
-                  todos={todos}
-                  recurringTasks={allRecurringTasks}
-                  onUpdate={handleScheduleUpdateTodo}
-                  habits={habitsWithTime}
-                  dailyPlans={dailyPlans}
-                  onOpenTriage={() => { setShowScheduleModal(false); setShowTriage(true); }}
-                  onScheduleUpdate={updateDailySchedule}
-                  onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
-                  onRefreshSchedule={refreshSchedule}
-                  workspaceMap={workspaceMap}
-                  ddayEntries={todayDdayEntries}
-                  onDeleteRecurringTask={handleDeleteRecurringTask}
-                  onOpenRoutineManager={() => { setShowScheduleModal(false); setShowRoutineManager(true); }}
-                />
-              </div>
-            </div>
-          </div>
         )}
 
         {/* ── 하단: 통계 대시보드 + 주간 리뷰 ── */}
