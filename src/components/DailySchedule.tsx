@@ -13,6 +13,7 @@ import {
   type ScheduleBlockType,
 } from "@/lib/autoScheduler";
 import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
+import { getWorkspaceColorByKey } from "@/hooks/useAllWorkspaceTodos";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -156,6 +157,77 @@ function getVisibleRange(
 }
 
 // ============================================
+// Overlap column assignment
+// ============================================
+
+type ColumnLayout = {
+  colIndex: number;
+  totalCols: number;
+};
+
+/**
+ * 겹치는 블록들을 그룹으로 묶고, 그룹 내에서 각 블록에 컬럼 인덱스를 할당.
+ * Google Calendar / Outlook 스타일의 가로 분할 레이아웃.
+ */
+function computeColumnLayout(blocks: ScheduleBlock[]): Map<string, ColumnLayout> {
+  const result = new Map<string, ColumnLayout>();
+  if (blocks.length === 0) return result;
+
+  // 시작시간 기준 정렬 (같으면 긴 블록 먼저)
+  const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin));
+
+  // 겹치는 블록을 연결 그래프로 그룹핑
+  const groups: ScheduleBlock[][] = [];
+  let currentGroup: ScheduleBlock[] = [];
+  let groupEnd = -1;
+
+  for (const block of sorted) {
+    if (currentGroup.length === 0 || block.startMin < groupEnd) {
+      // 현재 그룹에 속함 (겹침)
+      currentGroup.push(block);
+      groupEnd = Math.max(groupEnd, block.endMin);
+    } else {
+      // 새 그룹 시작
+      groups.push(currentGroup);
+      currentGroup = [block];
+      groupEnd = block.endMin;
+    }
+  }
+  if (currentGroup.length > 0) groups.push(currentGroup);
+
+  // 각 그룹 내에서 컬럼 할당 (greedy)
+  for (const group of groups) {
+    const colEndTimes: number[] = []; // 각 컬럼의 마지막 endMin
+
+    for (const block of group) {
+      // 기존 컬럼 중 이 블록을 넣을 수 있는 가장 왼쪽 컬럼 찾기
+      let placed = false;
+      for (let c = 0; c < colEndTimes.length; c++) {
+        if (colEndTimes[c] <= block.startMin) {
+          colEndTimes[c] = block.endMin;
+          result.set(block.id, { colIndex: c, totalCols: 0 }); // totalCols는 나중에
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        result.set(block.id, { colIndex: colEndTimes.length, totalCols: 0 });
+        colEndTimes.push(block.endMin);
+      }
+    }
+
+    // totalCols 업데이트
+    const totalCols = colEndTimes.length;
+    for (const block of group) {
+      const layout = result.get(block.id)!;
+      layout.totalCols = totalCols;
+    }
+  }
+
+  return result;
+}
+
+// ============================================
 // Drag state type
 // ============================================
 
@@ -224,16 +296,64 @@ export default function DailySchedule({
 
   // Block positioning — visStartHour 기준 (가시 범위만 표시)
   // NOTE: visStartHour는 blocks 이후에 결정되므로 이 함수는 렌더 시에만 호출
-  function getBlockStyle(block: ScheduleBlock, refStartHour: number) {
-    // 드래그 중인 블록은 dragState의 좌표 사용
+  function getBlockStyle(block: ScheduleBlock, refStartHour: number): React.CSSProperties {
+    const layout = columnLayout.get(block.id);
+    const colIndex = layout?.colIndex ?? 0;
+    const totalCols = layout?.totalCols ?? 1;
+    const leftOffset = compact ? 36 : 56; // left-9=36px, left-14=56px (hour label width)
+    const rightPad = compact ? 4 : 8; // right-1=4px, right-2=8px
+    const gap = 2; // gap between columns
+
+    // 드래그 중인 블록은 dragState의 좌표 사용 (full width — 드래그 시 제약 없음)
     if (dragState && dragState.blockId === block.id) {
       const topPx = ((dragState.currentStartMin - refStartHour * 60) / 60) * HOUR_HEIGHT;
       const heightPx = ((dragState.currentEndMin - dragState.currentStartMin) / 60) * HOUR_HEIGHT;
-      return { top: `${topPx}px`, height: `${Math.max(heightPx, compact ? 18 : 24)}px` };
+      return {
+        top: `${topPx}px`,
+        height: `${Math.max(heightPx, compact ? 18 : 24)}px`,
+        left: `${leftOffset}px`,
+        right: `${rightPad}px`,
+      };
     }
     const topPx = ((block.startMin - refStartHour * 60) / 60) * HOUR_HEIGHT;
     const heightPx = ((block.endMin - block.startMin) / 60) * HOUR_HEIGHT;
-    return { top: `${topPx}px`, height: `${Math.max(heightPx, compact ? 18 : 24)}px` };
+
+    if (totalCols <= 1) {
+      return {
+        top: `${topPx}px`,
+        height: `${Math.max(heightPx, compact ? 18 : 24)}px`,
+        left: `${leftOffset}px`,
+        right: `${rightPad}px`,
+      };
+    }
+
+    // 가로 분할 레이아웃
+    return {
+      top: `${topPx}px`,
+      height: `${Math.max(heightPx, compact ? 18 : 24)}px`,
+      left: `calc(${leftOffset}px + (100% - ${leftOffset + rightPad}px) * ${colIndex} / ${totalCols} + ${colIndex > 0 ? gap : 0}px)`,
+      width: `calc((100% - ${leftOffset + rightPad}px) / ${totalCols} - ${gap}px)`,
+    };
+  }
+
+  // 워크스페이스 색상으로 블록 색상 결정 (todo/dday 타입일 때 해당 워크스페이스 색상 사용)
+  function getBlockColorResolved(block: ScheduleBlock): BlockColorConfig {
+    // todo 블록 → 워크스페이스 색상 사용
+    if (block.todoId && workspaceMap) {
+      const todo = todos.find((t) => t.id === block.todoId);
+      const wsInfo = todo ? workspaceMap.get(todo.workspace_id) : null;
+      if (wsInfo?.color) {
+        const wsColor = getWorkspaceColorByKey(wsInfo.color);
+        return {
+          border: wsColor.border.replace("border-l-", "border-"),
+          bg: wsColor.bg,
+          text: wsColor.text,
+          icon: block.type === "dday" ? "📌" : "",
+          label: wsInfo.name,
+        };
+      }
+    }
+    return getBlockColor(block);
   }
 
   // Generate schedule blocks
@@ -292,6 +412,9 @@ export default function DailySchedule({
     }
     return result;
   }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today, ddayEntries]);
+
+  // 겹침 컬럼 레이아웃 계산
+  const columnLayout = useMemo(() => computeColumnLayout(blocks), [blocks]);
 
   // 가시 범위 계산 (블록이 있는 시간대 + 현재 시각 기준)
   const visibleRange = useMemo(
@@ -612,16 +735,14 @@ export default function DailySchedule({
             {/* Schedule blocks */}
             {blocks.filter(b => b.endMin > visStartHour * 60 && b.startMin < visEndHour * 60).map((block) => {
               const style = getBlockStyle(block, visStartHour);
-              const colorCfg = getBlockColor(block);
+              const colorCfg = getBlockColorResolved(block);
               const isDragging = dragState?.blockId === block.id;
               const isDraggable = !!block.planId && !compact;
 
               return (
                 <div
                   key={block.id}
-                  className={`group absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 ${
-                    compact ? "left-9 right-1" : "left-14 right-2"
-                  } ${colorCfg.border} ${colorCfg.bg} ${
+                  className={`group absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 ${colorCfg.border} ${colorCfg.bg} ${
                     isDragging ? "z-30 shadow-lg opacity-90 ring-2 ring-[#007AFF]/30" : ""
                   } ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""}`}
                   style={style}
