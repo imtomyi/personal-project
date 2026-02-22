@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   try {
     // 허용된 엔드포인트만 허용 (보안)
-    const allowedPrefixes = ["courses", "users/self"];
+    const allowedPrefixes = ["courses", "users/self", "calendar_events"];
     const isAllowed = allowedPrefixes.some((prefix) =>
       endpoint.startsWith(prefix),
     );

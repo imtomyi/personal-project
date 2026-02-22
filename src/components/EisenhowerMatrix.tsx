@@ -26,8 +26,8 @@ type QuadrantConfig = {
 const QUADRANTS: QuadrantConfig[] = [
   {
     priority: 1,
-    label: "\uD83D\uDD25 \uAE34\uAE09 & \uC911\uC694",
-    subtitle: "\uC989\uC2DC \uC2E4\uD589",
+    label: "🔥 긴급 & 중요",
+    subtitle: "즉시 실행",
     headerBg: "bg-red-50 dark:bg-red-900/20",
     headerText: "text-red-700 dark:text-red-400",
     borderColor: "border-red-200 dark:border-red-800/50",
@@ -37,8 +37,8 @@ const QUADRANTS: QuadrantConfig[] = [
   },
   {
     priority: 2,
-    label: "\uD83D\uDCC5 \uC911\uC694 & \uBE44\uAE34\uAE09",
-    subtitle: "\uACC4\uD68D \uC218\uB9BD",
+    label: "📅 중요 & 비긴급",
+    subtitle: "계획 수립",
     headerBg: "bg-orange-50 dark:bg-orange-900/20",
     headerText: "text-orange-700 dark:text-orange-400",
     borderColor: "border-orange-200 dark:border-orange-800/50",
@@ -48,8 +48,8 @@ const QUADRANTS: QuadrantConfig[] = [
   },
   {
     priority: 3,
-    label: "\u26A1 \uAE34\uAE09 & \uBE44\uC911\uC694",
-    subtitle: "\uC704\uC784 \uAC00\uB2A5",
+    label: "⚡ 긴급 & 비중요",
+    subtitle: "위임 가능",
     headerBg: "bg-blue-50 dark:bg-blue-900/20",
     headerText: "text-blue-700 dark:text-blue-400",
     borderColor: "border-blue-200 dark:border-blue-800/50",
@@ -59,8 +59,8 @@ const QUADRANTS: QuadrantConfig[] = [
   },
   {
     priority: 4,
-    label: "\uD83D\uDCE6 \uBE44\uAE34\uAE09 & \uBE44\uC911\uC694",
-    subtitle: "\uB098\uC911\uC5D0 \uCC98\uB9AC",
+    label: "📦 비긴급 & 비중요",
+    subtitle: "나중에 처리",
     headerBg: "bg-gray-50 dark:bg-gray-800/50",
     headerText: "text-gray-600 dark:text-gray-400",
     borderColor: "border-gray-200 dark:border-gray-700",
@@ -149,10 +149,10 @@ export default function EisenhowerMatrix({ todos, onUpdate }: EisenhowerMatrixPr
           <div className="flex items-center justify-between bg-gray-50 px-4 py-3 dark:bg-gray-800/50">
             <div>
               <h3 className="text-[13px] font-semibold text-gray-600 dark:text-gray-400">
-                \uD83D\uDCCB \uBBF8\uBD84\uB958
+                📋 미분류
               </h3>
               <p className="text-[11px] text-gray-500 dark:text-gray-500">
-                \uC6B0\uC120\uC21C\uC704\uB97C \uC124\uC815\uD574\uC8FC\uC138\uC694
+                우선순위를 설정해주세요
               </p>
             </div>
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400">

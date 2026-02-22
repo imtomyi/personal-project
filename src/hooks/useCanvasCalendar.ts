@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import type { CanvasAssignment, CanvasCourse } from "@/hooks/useCanvas";
 import type { WorkspaceTodo } from "@/hooks/useAllWorkspaceTodos";
+import type { CanvasCalendarEvent } from "@/lib/types";
 import { toDateStr } from "@/lib/date";
 
 /**
  * Canvas(LearningX) 과제를 WorkspaceTodo 형태로 변환하여 워크스페이스 캘린더에 표시
+ * + Canvas calendar_events로 수업 시간표 가져오기
  * KHU 탭에서 연동된 토큰을 공유 사용
  */
 
@@ -38,6 +40,7 @@ function canvasAssignmentToTodo(
     sort_order: 0,
     parent_id: null,
     recurring_task_id: null,
+    goal_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     // WorkspaceTodo 추가 필드
@@ -51,6 +54,7 @@ function canvasAssignmentToTodo(
 export function useCanvasCalendar() {
   const [canvasTodos, setCanvasTodos] = useState<WorkspaceTodo[]>([]);
   const [canvasCourses, setCanvasCourses] = useState<{ id: string; name: string }[]>([]);
+  const [classEvents, setClassEvents] = useState<CanvasCalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
@@ -62,6 +66,7 @@ export function useCanvasCalendar() {
       setIsConnected(false);
       setCanvasTodos([]);
       setCanvasCourses([]);
+      setClassEvents([]);
       return;
     }
 
@@ -81,6 +86,7 @@ export function useCanvasCalendar() {
         setIsConnected(true);
         setCanvasTodos([]);
         setCanvasCourses([]);
+        setClassEvents([]);
         setLoading(false);
         return;
       }
@@ -131,11 +137,34 @@ export function useCanvasCalendar() {
       }
 
       setCanvasTodos(allTodos);
+
+      // 3. Fetch calendar events (수업 시간표)
+      try {
+        const contextCodes = courses
+          .map((c) => `context_codes[]=course_${c.id}`)
+          .join("&");
+        const now = new Date();
+        const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endDate = new Date(now.getFullYear(), now.getMonth() + 4, 0);
+
+        const calEndpoint = `calendar_events?type=event&${contextCodes}&start_date=${toDateStr(startDate)}&end_date=${toDateStr(endDate)}&per_page=200`;
+        const calRes = await fetch(
+          `/api/canvas?token=${encodeURIComponent(token)}&endpoint=${encodeURIComponent(calEndpoint)}`
+        );
+        const calData = await calRes.json();
+        if (!calData.error && Array.isArray(calData)) {
+          setClassEvents(calData as CanvasCalendarEvent[]);
+        }
+      } catch {
+        // calendar_events 실패해도 다른 기능엔 영향 없음
+      }
+
       setIsConnected(true);
     } catch {
       setIsConnected(false);
       setCanvasTodos([]);
       setCanvasCourses([]);
+      setClassEvents([]);
     } finally {
       setLoading(false);
     }
@@ -159,6 +188,7 @@ export function useCanvasCalendar() {
   return {
     canvasTodos,
     canvasCourses,
+    classEvents,
     loading,
     isConnected,
     refresh: fetchCanvasData,

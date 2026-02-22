@@ -4,18 +4,23 @@ import { useState } from "react";
 import { todayKST, parseNaturalDate } from "@/lib/date";
 import { DURATION_PRESETS, DEFAULT_DURATION_HOURS } from "@/lib/constants";
 import DatePicker from "./DatePicker";
+import type { Goal } from "@/lib/types";
 
 type AddTodoProps = {
-  onAdd: (title: string, description?: string, dueDate?: string, durationHours?: number) => Promise<void>;
+  onAdd: (title: string, description?: string, dueDate?: string, durationHours?: number, goalId?: string) => Promise<void>;
+  goals?: Goal[];
 };
 
-export default function AddTodo({ onAdd }: AddTodoProps) {
+export default function AddTodo({ onAdd, goals }: AddTodoProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(todayKST());
   const [durationHours, setDurationHours] = useState(DEFAULT_DURATION_HOURS);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const activeGoals = goals?.filter((g) => g.status === "active") ?? [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,11 +31,12 @@ export default function AddTodo({ onAdd }: AddTodoProps) {
       const { cleaned, date: parsedDate } = parseNaturalDate(title.trim());
       const finalTitle = parsedDate ? cleaned : title.trim();
       const finalDueDate = parsedDate ?? dueDate;
-      await onAdd(finalTitle, description.trim() || undefined, finalDueDate, durationHours);
+      await onAdd(finalTitle, description.trim() || undefined, finalDueDate, durationHours, selectedGoalId ?? undefined);
       setTitle("");
       setDescription("");
       setDueDate(todayKST());
       setDurationHours(24);
+      setSelectedGoalId(null);
       setExpanded(false);
     } catch (err) {
       console.error("Failed to add todo:", err);
@@ -93,6 +99,42 @@ export default function AddTodo({ onAdd }: AddTodoProps) {
               </div>
             </div>
 
+            {/* 목표 연결 */}
+            {activeGoals.length > 0 && (
+              <div className="mt-3 flex items-center gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center text-gray-400 dark:text-gray-500">
+                  🎯
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGoalId(null)}
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
+                      !selectedGoalId
+                        ? "bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200"
+                        : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    없음
+                  </button>
+                  {activeGoals.map((goal) => (
+                    <button
+                      key={goal.id}
+                      type="button"
+                      onClick={() => setSelectedGoalId(goal.id)}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        selectedGoalId === goal.id
+                          ? "bg-blue-500 text-white shadow-sm"
+                          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                      }`}
+                    >
+                      {goal.emoji} {goal.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="mt-3 flex justify-end gap-2">
               <button
                 type="button"
@@ -105,6 +147,7 @@ export default function AddTodo({ onAdd }: AddTodoProps) {
                   setDescription("");
                   setDueDate(todayKST());
                   setDurationHours(DEFAULT_DURATION_HOURS);
+                  setSelectedGoalId(null);
                 }}
                 className="rounded-lg px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
               >

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { ExerciseEntry, ExerciseType } from "@/lib/workspace-widgets";
+import { EXERCISE_STORAGE_KEY } from "@/lib/workspace-widgets";
 import { todayKST, nowKST } from "@/lib/date";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
@@ -16,12 +17,12 @@ const EXERCISE_TYPES: { type: ExerciseType; label: string; emoji: string }[] = [
 ];
 
 const QUICK_EXERCISES: { name: string; type: ExerciseType; durationMin: number; calories: number }[] = [
-  { name: "러닝 30분", type: "cardio", durationMin: 30, calories: 300 },
-  { name: "웨이트 60분", type: "strength", durationMin: 60, calories: 400 },
-  { name: "요가 45분", type: "flexibility", durationMin: 45, calories: 200 },
-  { name: "수영 40분", type: "cardio", durationMin: 40, calories: 350 },
-  { name: "자전거 30분", type: "cardio", durationMin: 30, calories: 250 },
-  { name: "스트레칭 15분", type: "flexibility", durationMin: 15, calories: 50 },
+  { name: "러닝", type: "cardio", durationMin: 30, calories: 300 },
+  { name: "웨이트", type: "strength", durationMin: 60, calories: 400 },
+  { name: "요가", type: "flexibility", durationMin: 45, calories: 200 },
+  { name: "수영", type: "cardio", durationMin: 40, calories: 350 },
+  { name: "자전거", type: "cardio", durationMin: 30, calories: 250 },
+  { name: "스트레칭", type: "flexibility", durationMin: 15, calories: 50 },
 ];
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -47,9 +48,14 @@ export default function ExerciseWidget() {
   const [customType, setCustomType] = useState<ExerciseType>("cardio");
   const [customDuration, setCustomDuration] = useState(30);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // Quick exercise duration adjustment
+  const [quickEditIdx, setQuickEditIdx] = useState<number | null>(null);
+  const [quickDuration, setQuickDuration] = useState(0);
+  const [quickCalories, setQuickCalories] = useState(0);
 
   const { user } = useAuth();
   const supabase = createClient();
+  const migratedRef = useRef(false);
 
   const today = todayKST();
   const viewingDay = selectedDay || today;
@@ -61,12 +67,16 @@ export default function ExerciseWidget() {
 
   const fetchSessions = useCallback(async () => {
     if (!user) return;
-    const { data: rows } = await supabase
+    const { data: rows, error } = await supabase
       .from("exercise_sessions")
       .select("*")
       .eq("user_id", user.id)
       .order("completed_at", { ascending: true });
 
+    if (error) {
+      console.error("Exercise fetch failed:", error);
+      return;
+    }
     if (!rows) return;
 
     const grouped: DayData = {};
@@ -86,6 +96,63 @@ export default function ExerciseWidget() {
       grouped[row.date].push(entry);
     }
     setData(grouped);
+
+    // 1회성 localStorage → Supabase 마이그레이션
+    if (!migratedRef.current && user) {
+      migratedRef.current = true;
+      try {
+        const stored = localStorage.getItem(EXERCISE_STORAGE_KEY);
+        if (stored && (!rows || rows.length === 0)) {
+          const localData = JSON.parse(stored) as Record<string, ExerciseEntry[]>;
+          const toInsert: Array<Record<string, unknown>> = [];
+          for (const [dateKey, entries] of Object.entries(localData)) {
+            for (const e of entries) {
+              toInsert.push({
+                user_id: user.id,
+                date: dateKey,
+                name: e.name,
+                type: e.type,
+                duration_min: e.durationMin,
+                calories_burned: e.caloriesBurned || null,
+                sets: e.sets || null,
+                reps: e.reps || null,
+                memo: e.memo || null,
+              });
+            }
+          }
+          if (toInsert.length > 0) {
+            await supabase.from("exercise_sessions").insert(toInsert);
+            localStorage.removeItem(EXERCISE_STORAGE_KEY);
+            // Re-fetch after migration
+            const { data: newRows } = await supabase
+              .from("exercise_sessions")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("completed_at", { ascending: true });
+            if (newRows) {
+              const newGrouped: DayData = {};
+              for (const row of newRows) {
+                const entry: ExerciseEntry = {
+                  id: row.id, name: row.name, type: row.type,
+                  durationMin: row.duration_min,
+                  caloriesBurned: row.calories_burned ?? undefined,
+                  sets: row.sets ?? undefined, reps: row.reps ?? undefined,
+                  memo: row.memo ?? undefined, completedAt: row.completed_at,
+                };
+                if (!newGrouped[row.date]) newGrouped[row.date] = [];
+                newGrouped[row.date].push(entry);
+              }
+              setData(newGrouped);
+            }
+          }
+        } else if (stored && rows && rows.length > 0) {
+          // Supabase에 이미 데이터가 있으면 localStorage 잔여 데이터 정리
+          localStorage.removeItem(EXERCISE_STORAGE_KEY);
+        }
+      } catch {
+        // 마이그레이션 실패 시 무시
+      }
+    }
   }, [user, supabase]);
 
   useEffect(() => {
@@ -108,11 +175,13 @@ export default function ExerciseWidget() {
       id: crypto.randomUUID(),
       completedAt: new Date().toISOString(),
     };
+    // Optimistic update
     setData((prev) => ({
       ...prev,
       [dateKey]: [...(prev[dateKey] || []), newEntry],
     }));
-    await supabase.from("exercise_sessions").insert({
+
+    const { error } = await supabase.from("exercise_sessions").insert({
       id: newEntry.id,
       user_id: user.id,
       date: dateKey,
@@ -124,19 +193,66 @@ export default function ExerciseWidget() {
       reps: entry.reps || null,
       memo: entry.memo || null,
     });
+
+    if (error) {
+      // Rollback optimistic update on error
+      console.error("Exercise insert failed:", error);
+      setData((prev) => {
+        const updated = { ...prev, [dateKey]: (prev[dateKey] || []).filter((e) => e.id !== newEntry.id) };
+        if (updated[dateKey]?.length === 0) delete updated[dateKey];
+        return updated;
+      });
+      return;
+    }
+
+    // 운동 습관 자동 체크 이벤트
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("exercise-logged", { detail: { date: dateKey } }),
+      );
+    }
   }, [user, today, supabase]);
 
   const removeEntry = useCallback(async (id: string, dateKey: string) => {
+    // Save for rollback
+    const prevEntries = data[dateKey] || [];
     setData((prev) => {
       const updated = { ...prev, [dateKey]: (prev[dateKey] || []).filter((e) => e.id !== id) };
       if (updated[dateKey]?.length === 0) delete updated[dateKey];
       return updated;
     });
-    await supabase.from("exercise_sessions").delete().eq("id", id);
-  }, [supabase]);
 
-  const handleQuickAdd = (ex: typeof QUICK_EXERCISES[0]) => {
-    addEntry({ name: ex.name, type: ex.type, durationMin: ex.durationMin, caloriesBurned: ex.calories }, viewingDay);
+    const { error } = await supabase.from("exercise_sessions").delete().eq("id", id);
+    if (error) {
+      console.error("Exercise delete failed:", error);
+      // Rollback
+      setData((prev) => ({ ...prev, [dateKey]: prevEntries }));
+    }
+  }, [supabase, data]);
+
+  const handleQuickAdd = (idx: number) => {
+    const ex = QUICK_EXERCISES[idx];
+    if (quickEditIdx === idx) {
+      // Already editing this one — close
+      setQuickEditIdx(null);
+      return;
+    }
+    setQuickEditIdx(idx);
+    setQuickDuration(ex.durationMin);
+    setQuickCalories(ex.calories);
+  };
+
+  const handleQuickConfirm = () => {
+    if (quickEditIdx === null) return;
+    const ex = QUICK_EXERCISES[quickEditIdx];
+    const calPerMin = ex.calories / ex.durationMin;
+    addEntry({
+      name: `${ex.name} ${quickDuration}분`,
+      type: ex.type,
+      durationMin: quickDuration,
+      caloriesBurned: Math.round(calPerMin * quickDuration),
+    }, viewingDay);
+    setQuickEditIdx(null);
   };
 
   const handleCustomAdd = () => {
@@ -299,16 +415,70 @@ export default function ExerciseWidget() {
         </div>
       )}
 
-      <div className="mb-2 flex flex-wrap gap-1">
-        {QUICK_EXERCISES.map((ex) => (
-          <button
-            key={ex.name}
-            onClick={() => handleQuickAdd(ex)}
-            className="rounded-lg border border-gray-200 px-2 py-1 text-[10px] font-medium text-gray-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-gray-600 dark:text-gray-400 dark:hover:border-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400"
-          >
-            {ex.name}
-          </button>
-        ))}
+      <div className="mb-2">
+        <div className="flex flex-wrap gap-1">
+          {QUICK_EXERCISES.map((ex, idx) => (
+            <button
+              key={ex.name}
+              onClick={() => handleQuickAdd(idx)}
+              className={`rounded-lg border px-2 py-1 text-[10px] font-medium transition-colors ${
+                quickEditIdx === idx
+                  ? "border-orange-400 bg-orange-50 text-orange-700 dark:border-orange-500 dark:bg-orange-900/30 dark:text-orange-400"
+                  : "border-gray-200 text-gray-600 hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-gray-600 dark:text-gray-400 dark:hover:border-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400"
+              }`}
+            >
+              {EXERCISE_TYPES.find((t) => t.type === ex.type)?.emoji} {ex.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Inline duration editor for quick exercise */}
+        {quickEditIdx !== null && (
+          <div className="mt-1.5 flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50/50 px-2.5 py-2 dark:border-orange-800 dark:bg-orange-900/20">
+            <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+              {EXERCISE_TYPES.find((t) => t.type === QUICK_EXERCISES[quickEditIdx].type)?.emoji}{" "}
+              {QUICK_EXERCISES[quickEditIdx].name}
+            </span>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setQuickDuration(Math.max(5, quickDuration - 5))}
+                className="flex h-5 w-5 items-center justify-center rounded border border-gray-200 text-[10px] font-bold text-gray-400 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-600"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                value={quickDuration}
+                onChange={(e) => setQuickDuration(Math.max(5, Number(e.target.value)))}
+                className="w-10 rounded border border-gray-200 bg-white px-1 py-0.5 text-center text-[10px] dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                min={5}
+                step={5}
+              />
+              <button
+                type="button"
+                onClick={() => setQuickDuration(quickDuration + 5)}
+                className="flex h-5 w-5 items-center justify-center rounded border border-gray-200 text-[10px] font-bold text-gray-400 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-600"
+              >
+                +
+              </button>
+              <span className="text-[10px] text-gray-400">분</span>
+            </div>
+            <div className="flex-1" />
+            <button
+              onClick={() => setQuickEditIdx(null)}
+              className="px-1.5 py-0.5 text-[10px] text-gray-400 hover:text-gray-600"
+            >
+              취소
+            </button>
+            <button
+              onClick={handleQuickConfirm}
+              className="rounded-md bg-orange-500 px-2.5 py-0.5 text-[10px] font-medium text-white hover:bg-orange-600"
+            >
+              추가
+            </button>
+          </div>
+        )}
       </div>
 
       {showAdd ? (

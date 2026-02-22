@@ -59,3 +59,39 @@ export const KHU_QUICK_LINKS = [
   { label: "생협", url: "https://khucoop.com", emoji: "🍽️" },
   { label: "셔틀 예매", url: "https://sites.google.com/dongyeongtour.co.kr/khu/main", emoji: "🚌" },
 ] as const;
+
+// ============================================
+// 일일 계획 세션 시간 프리셋 (분 단위)
+// ============================================
+
+export const SESSION_DURATION_PRESETS = [
+  { label: "30분", value: 30 },
+  { label: "1시간", value: 60 },
+  { label: "1.5시간", value: 90 },
+  { label: "2시간", value: 120 },
+  { label: "2.5시간", value: 150 },
+  { label: "3시간", value: 180 },
+] as const;
+
+// ============================================
+// 반복 주기 옵션 (루틴 관리 공통)
+// ============================================
+
+export const RECURRENCE_OPTIONS = [
+  { key: "daily", label: "매일" },
+  { key: "weekdays", label: "평일" },
+  { key: "weekly", label: "매주" },
+  { key: "custom", label: "사용자 지정" },
+] as const;
+
+// ============================================
+// 과제 유형별 예상 소요시간 (시간 단위)
+// ============================================
+
+export const ASSIGNMENT_EFFORT_HOURS: Record<string, number> = {
+  exam: 4,
+  assignment: 2,
+  quiz: 1,
+  project: 3,
+  other: 1,
+};

@@ -51,6 +51,7 @@ export type Todo = {
   sort_order: number;
   parent_id: string | null;
   recurring_task_id: string | null;
+  goal_id: string | null;
   created_at: string;
   updated_at: string;
   profiles?: Profile | null;
@@ -97,6 +98,17 @@ export type Assignment = {
   updated_at: string;
   course?: Course;
   canvas_assignment_id: number | null;
+};
+
+// Canvas Calendar Event (수업 시간표)
+export type CanvasCalendarEvent = {
+  id: number;
+  title: string;
+  start_at: string; // ISO datetime
+  end_at: string; // ISO datetime
+  context_code: string; // e.g., "course_12345"
+  location_name?: string;
+  description?: string;
 };
 
 export type KhuNotice = {
@@ -154,6 +166,10 @@ export type Habit = {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+  // 시간표 연동 (선택)
+  time_start: string | null;      // "HH:MM"
+  time_end: string | null;        // "HH:MM"
+  days_of_week: number[] | null;  // [0..6], null이면 frequency 기반
 };
 
 export type HabitLog = {
@@ -215,6 +231,61 @@ export type RecurringTask = {
   is_active: boolean;
   sort_order: number;
   created_at: string;
+};
+
+// ============================================
+// 일일 계획 (Daily Planning) 타입
+// ============================================
+export type DailyPlan = {
+  id: string;
+  user_id: string;
+  todo_id: string;
+  date: string;                          // "YYYY-MM-DD"
+  estimated_minutes: number;             // 30, 60, 90, 120, 150, 180
+  scheduled_start_min: number | null;    // 자정 기준 분 (540 = 09:00)
+  scheduled_end_min: number | null;
+  is_skipped: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// ============================================
+// D-Day 타입
+// ============================================
+export type DdayEntry = {
+  id: string;
+  user_id: string;
+  title: string;
+  date: string; // "YYYY-MM-DD"
+  emoji: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+};
+
+// ============================================
+// 루틴 통합 타입 (습관 + 반복일정 가상 레이어)
+// ============================================
+export type RoutineMode = "habit" | "task";
+
+export type Routine = {
+  id: string;
+  name: string;
+  emoji: string;
+  mode: RoutineMode;
+  recurrence: RecurrenceType;
+  days_of_week: number[];
+  time_start: string | null;
+  time_end: string | null;
+  is_active: boolean;
+  sort_order: number;
+  // task 전용
+  workspace_id: string | null;
+  priority: number | null;
+  description: string | null;
+  // 내부 소스 추적
+  _source: "habits" | "recurring_tasks";
 };
 
 // ============================================

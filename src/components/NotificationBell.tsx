@@ -76,15 +76,19 @@ export default function NotificationBell() {
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative z-[60]">
       {/* Bell button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-full p-2 text-secondary hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.08] dark:hover:text-white"
+        className={`relative rounded-full p-2 transition-colors ${
+          open
+            ? "bg-black/[0.08] text-foreground dark:bg-white/[0.12] dark:text-white"
+            : "text-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:text-white/60 dark:hover:bg-white/[0.08] dark:hover:text-white"
+        }`}
         aria-label="알림"
       >
         <svg
-          className="h-[18px] w-[18px]"
+          className="h-5 w-5"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -92,12 +96,12 @@ export default function NotificationBell() {
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth={1.5}
+            strokeWidth={1.8}
             d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
           />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         )}
@@ -111,9 +115,9 @@ export default function NotificationBell() {
             className="fixed inset-0 z-[60] bg-black/50 md:hidden"
             onClick={() => setOpen(false)}
           />
-          <div className="fixed inset-x-0 top-0 bottom-0 z-[70] flex flex-col bg-white dark:bg-[#1c1c1e] md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:z-50 md:w-80 md:rounded-2xl md:shadow-[0_4px_24px_rgba(0,0,0,0.12)] md:dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
+          <div className="fixed inset-x-0 top-0 bottom-0 z-[70] flex flex-col bg-white dark:bg-[#1c1c1e] md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-96 md:rounded-2xl md:border md:border-black/[0.08] md:shadow-[0_8px_40px_rgba(0,0,0,0.16)] md:dark:border-white/[0.1] md:dark:shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3 dark:border-white/[0.08]">
+          <div className="flex items-center justify-between border-b border-black/[0.06] px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] dark:border-white/[0.08]">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setOpen(false)}
@@ -138,7 +142,7 @@ export default function NotificationBell() {
           </div>
 
           {/* List */}
-          <div className="flex-1 overflow-y-auto md:max-h-80">
+          <div className="flex-1 overflow-y-auto md:max-h-96">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#007AFF] border-t-transparent" />

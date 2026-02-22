@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { todayKST } from "@/lib/date";
 import { WEEKDAY_LABELS } from "@/lib/constants";
 
@@ -58,9 +59,15 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
   const todayStr = todayKST();
   const todayDate = new Date(todayStr + "T00:00:00");
 
+  const portalRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        ref.current && !ref.current.contains(target) &&
+        (!portalRef.current || !portalRef.current.contains(target))
+      ) {
         setOpen(false);
       }
     }
@@ -127,11 +134,40 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
 
   const selectedStr = effectiveValue;
 
+  // Calculate portal popup position for inline mode
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [portalPos, setPortalPos] = useState<{ top: number; left: number } | null>(null);
+
+  const updatePortalPos = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popupW = 260; // w-64 = 16rem = 256px + padding
+    let left = rect.right - popupW;
+    if (left < 8) left = 8;
+    if (left + popupW > window.innerWidth - 8) left = window.innerWidth - popupW - 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow < 320 ? rect.top + window.scrollY - 320 : rect.bottom + window.scrollY + 4;
+    setPortalPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (open && inline) {
+      updatePortalPos();
+      window.addEventListener("scroll", updatePortalPos, true);
+      window.addEventListener("resize", updatePortalPos);
+      return () => {
+        window.removeEventListener("scroll", updatePortalPos, true);
+        window.removeEventListener("resize", updatePortalPos);
+      };
+    }
+  }, [open, inline, updatePortalPos]);
+
   // Inline mode: small icon button with optional date chip
   if (inline) {
     return (
       <div ref={ref} className="relative">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => !disabled && setOpen(!open)}
           disabled={disabled}
@@ -148,8 +184,13 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
           {value && <span>{formatDateShort(value)}</span>}
         </button>
 
-        {open && (
-          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+        {open && portalPos && createPortal(
+          <div
+            ref={portalRef}
+            className="fixed z-[9999] w-64 rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            style={{ top: portalPos.top, left: portalPos.left }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             {renderCalendar()}
             {/* Footer */}
             <div className="mt-1.5 flex items-center justify-between border-t border-gray-100 pt-1.5 dark:border-gray-700">
@@ -170,7 +211,8 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
                 </button>
               )}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );

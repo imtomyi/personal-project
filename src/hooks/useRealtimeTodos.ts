@@ -31,7 +31,7 @@ export function useRealtimeTodos(workspaceId: string) {
     onChanged: fetchTodos,
   });
 
-  async function addTodo(title: string, description?: string, dueDate?: string, durationDays?: number) {
+  async function addTodo(title: string, description?: string, dueDate?: string, durationDays?: number, goalId?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     const nextOrder = (todos.length > 0 ? Math.max(...todos.map(t => t.sort_order)) : 0) + 1;
     const finalDueDate = dueDate || todayKST();
@@ -64,6 +64,7 @@ export function useRealtimeTodos(workspaceId: string) {
       due_date: finalDueDate,
       duration_days: finalDuration,
       sort_order: nextOrder,
+      ...(goalId ? { goal_id: goalId } : {}),
     });
 
     if (error) {

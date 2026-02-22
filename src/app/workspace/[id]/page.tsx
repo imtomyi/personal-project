@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
@@ -20,14 +20,17 @@ import InviteModal from "@/components/InviteModal";
 import ApplyTemplateModal from "@/components/ApplyTemplateModal";
 import EisenhowerMatrix from "@/components/EisenhowerMatrix";
 import KanbanBoard from "@/components/KanbanBoard";
-import DailySchedule from "@/components/DailySchedule";
-import RecurringTaskManager from "@/components/RecurringTaskManager";
+import RoutineManager from "@/components/RoutineManager";
 import PomodoroTimer from "@/components/PomodoroTimer";
 import KeyboardShortcuts from "@/components/KeyboardShortcuts";
 import CommandPalette from "@/components/CommandPalette";
 import { useTheme } from "@/context/ThemeContext";
 import { useReminders } from "@/hooks/useReminders";
 import { useRecurringTasks } from "@/hooks/useRecurringTasks";
+import { useAssignments } from "@/hooks/useAssignments";
+import { useCanvasCalendar } from "@/hooks/useCanvasCalendar";
+import { useHabits } from "@/hooks/useHabits";
+import { useGoals } from "@/hooks/useGoals";
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -44,7 +47,7 @@ export default function WorkspaceDetailPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showApplyTemplate, setShowApplyTemplate] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [view, setView] = useState<"list" | "calendar" | "matrix" | "kanban" | "schedule">("list");
+  const [view, setView] = useState<"list" | "calendar" | "matrix" | "kanban">("list");
   const [showRecurring, setShowRecurring] = useState(false);
 
   const { todos, loading: todosLoading, addTodo, addSubtask, updateTodo, deleteTodo, reorderTodos, applyTemplate } =
@@ -53,6 +56,18 @@ export default function WorkspaceDetailPage() {
   useReminders(todos);
 
   const { tasks: recurringTasks } = useRecurringTasks(workspaceId);
+  const { assignments } = useAssignments();
+  const { classEvents, canvasCourses } = useCanvasCalendar();
+  const { habitsWithTime } = useHabits();
+  const { goals } = useGoals();
+  // Canvas context_code → course name mapping
+  const courseNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of canvasCourses) {
+      map.set(`course_${c.id}`, c.name);
+    }
+    return map;
+  }, [canvasCourses]);
 
   const fetchWorkspace = useCallback(async () => {
     const { data } = await supabase
@@ -84,9 +99,9 @@ export default function WorkspaceDetailPage() {
     }
   }, [user, authLoading, router, fetchWorkspace, fetchMembers]);
 
-  async function handleAddTodo(title: string, description?: string, dueDate?: string, durationHours?: number) {
+  async function handleAddTodo(title: string, description?: string, dueDate?: string, durationHours?: number, goalId?: string) {
     try {
-      await addTodo(title, description, dueDate, durationHours);
+      await addTodo(title, description, dueDate, durationHours, goalId);
       showToast("할 일이 추가되었습니다");
     } catch {
       showToast("할 일 추가에 실패했습니다", "error");
@@ -131,9 +146,6 @@ export default function WorkspaceDetailPage() {
       case "view-kanban":
         setView("kanban");
         break;
-      case "view-schedule":
-        setView("schedule");
-        break;
       case "view-matrix":
         setView("matrix");
         break;
@@ -162,9 +174,14 @@ export default function WorkspaceDetailPage() {
   const active = total - completed;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
   const todayStr = toDateStr(nowKST());
-  const overdue = realTodos.filter(
-    (t) => !t.is_completed && t.due_date && toDateStr(parseLocalDate(t.due_date)) < todayStr
-  ).length;
+  const overdueTodos = useMemo(
+    () =>
+      realTodos.filter(
+        (t) => !t.is_completed && t.due_date && toDateStr(parseLocalDate(t.due_date)) < todayStr,
+      ),
+    [realTodos, todayStr],
+  );
+  const overdue = overdueTodos.length;
 
   if (loading || authLoading) {
     return (
@@ -232,7 +249,7 @@ export default function WorkspaceDetailPage() {
             <button
               onClick={() => setShowRecurring(true)}
               className="rounded-xl bg-black/[0.05] p-2.5 text-secondary transition-colors hover:bg-black/[0.08] hover:text-foreground dark:bg-white/[0.1] dark:hover:bg-white/[0.15] dark:hover:text-white"
-              title="반복 할일"
+              title="루틴 관리"
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -336,19 +353,6 @@ export default function WorkspaceDetailPage() {
                 칸반
               </button>
               <button
-                onClick={() => setView("schedule")}
-                className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
-                  view === "schedule"
-                    ? "bg-white text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[#2c2c2e] dark:text-white"
-                    : "text-secondary hover:text-foreground dark:hover:text-white"
-                }`}
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                시간표
-              </button>
-              <button
                 onClick={() => setView("matrix")}
                 className={`flex flex-1 items-center justify-center gap-1 rounded-[10px] px-3 py-1.5 text-[12px] font-medium transition-all sm:flex-none sm:gap-1.5 sm:px-3.5 ${
                   view === "matrix"
@@ -372,7 +376,7 @@ export default function WorkspaceDetailPage() {
           </div>
         ) : view === "list" ? (
           <div>
-            <AddTodo onAdd={handleAddTodo} />
+            <AddTodo onAdd={handleAddTodo} goals={goals} />
             <TodoList
               todos={todos}
               members={members}
@@ -397,12 +401,6 @@ export default function WorkspaceDetailPage() {
             members={members}
             onUpdate={handleUpdateTodo}
             onDelete={handleDeleteTodo}
-          />
-        ) : view === "schedule" ? (
-          <DailySchedule
-            todos={todos}
-            recurringTasks={recurringTasks}
-            onUpdate={handleUpdateTodo}
           />
         ) : (
           <EisenhowerMatrix
@@ -442,12 +440,11 @@ export default function WorkspaceDetailPage() {
         />
       )}
       {showRecurring && (
-        <RecurringTaskManager
+        <RoutineManager
           workspaceId={workspaceId}
           onClose={() => setShowRecurring(false)}
         />
       )}
-
       {/* Keyboard shortcuts & Command palette */}
       <KeyboardShortcuts onOpenCommandPalette={() => setShowCommandPalette((prev) => !prev)} />
       <CommandPalette
@@ -456,7 +453,20 @@ export default function WorkspaceDetailPage() {
         onAction={handleCommandAction}
       />
 
-      <PomodoroTimer />
+      <PomodoroTimer
+        todos={realTodos.filter((t) => !t.is_completed).map((t) => ({ id: t.id, title: t.title }))}
+        onWorkSessionComplete={async (todoId: string, durationSec: number) => {
+          if (!user) return;
+          await supabase.from("time_entries").insert({
+            user_id: user.id,
+            todo_id: todoId,
+            workspace_id: workspaceId,
+            started_at: new Date(Date.now() - durationSec * 1000).toISOString(),
+            ended_at: new Date().toISOString(),
+            duration_sec: durationSec,
+          });
+        }}
+      />
     </div>
   );
 }

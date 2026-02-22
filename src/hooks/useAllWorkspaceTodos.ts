@@ -125,6 +125,7 @@ export function useAllWorkspaceTodos() {
             sort_order: a.sort_order,
             parent_id: null,
             recurring_task_id: null,
+            goal_id: null,
             created_at: a.created_at,
             updated_at: a.updated_at,
             workspace_name: wsInfo?.name ?? "Unknown",
@@ -169,7 +170,7 @@ export function useAllWorkspaceTodos() {
     // realtime subscription will trigger fetchAll automatically
   }, [supabase, todos]);
 
-  const updateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "due_date" | "duration_days">>) => {
+  const updateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "due_date" | "duration_days" | "is_completed" | "status">>) => {
     // Optimistic update
     setTodos((prev) => prev.map((t) => t.id === id ? { ...t, ...updates } : t));
     const { error } = await supabase.from("todos").update(updates).eq("id", id);

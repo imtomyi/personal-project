@@ -1,12 +1,18 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "./useRealtimeSubscription";
-import type { Goal } from "@/lib/types";
+import type { Goal, Todo } from "@/lib/types";
 
-export function useGoals() {
+export type GoalTodoStats = {
+  total: number;
+  completed: number;
+  progress: number; // 0-100
+};
+
+export function useGoals(allTodos?: Todo[]) {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +28,23 @@ export function useGoals() {
     setGoals(data ?? []);
     setLoading(false);
   }, [user, supabase]);
+
+  /** 각 goal에 연결된 할일 통계 */
+  const goalTodoStatsMap = useMemo(() => {
+    const map = new Map<string, GoalTodoStats>();
+    if (!allTodos) return map;
+    for (const goal of goals) {
+      const linked = allTodos.filter((t) => t.goal_id === goal.id);
+      if (linked.length === 0) continue;
+      const completedCount = linked.filter((t) => t.is_completed).length;
+      map.set(goal.id, {
+        total: linked.length,
+        completed: completedCount,
+        progress: Math.round((completedCount / linked.length) * 100),
+      });
+    }
+    return map;
+  }, [goals, allTodos]);
 
   useRealtimeSubscription({
     channelName: user ? `goals:${user.id}` : "goals:noop",
@@ -75,5 +98,6 @@ export function useGoals() {
     addGoal,
     updateGoal,
     deleteGoal,
+    goalTodoStatsMap,
   };
 }

@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useGoals } from "@/hooks/useGoals";
+import { useGoals, type GoalTodoStats } from "@/hooks/useGoals";
+import type { Todo } from "@/lib/types";
 
 const EMOJI_OPTIONS = ["🎯", "📈", "💡", "🏆", "⭐", "🚀", "📖", "💪", "🎓", "💰"];
 
-export default function GoalWidget() {
-  const { goals, loading, addGoal, updateGoal, deleteGoal } = useGoals();
+type GoalWidgetProps = {
+  /** 전체 할일 목록 (goal_id로 연결 통계 계산) */
+  allTodos?: Todo[];
+};
+
+export default function GoalWidget({ allTodos }: GoalWidgetProps) {
+  const { goals, loading, addGoal, updateGoal, deleteGoal, goalTodoStatsMap } = useGoals(allTodos);
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newEmoji, setNewEmoji] = useState("🎯");
@@ -32,6 +38,15 @@ export default function GoalWidget() {
       updates.status = "completed";
     }
     await updateGoal(id, updates);
+  }
+
+  /** 연결된 할일이 있으면 자동 진행률, 없으면 수동 슬라이더 */
+  function getEffectiveProgress(goalId: string, manualProgress: number): { progress: number; stats: GoalTodoStats | null } {
+    const stats = goalTodoStatsMap.get(goalId);
+    if (stats && stats.total > 0) {
+      return { progress: stats.progress, stats };
+    }
+    return { progress: manualProgress, stats: null };
   }
 
   if (loading) {
@@ -116,54 +131,71 @@ export default function GoalWidget() {
         </div>
       ) : (
         <div className="space-y-3">
-          {activeGoals.map((goal) => (
-            <div key={goal.id} className="group">
-              <div className="mb-1 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">{goal.emoji}</span>
-                  <span className="text-[13px] font-medium text-foreground dark:text-[#e5e5e7]">
-                    {goal.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-medium text-[#007AFF]">{goal.progress}%</span>
-                  <button
-                    onClick={() => deleteGoal(goal.id)}
-                    className="rounded p-0.5 text-secondary opacity-0 hover:text-red-500 group-hover:opacity-100"
-                  >
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+          {activeGoals.map((goal) => {
+            const { progress, stats } = getEffectiveProgress(goal.id, goal.progress);
+            const hasLinkedTodos = stats !== null;
 
-              {/* Progress bar */}
-              <div className="relative">
-                <div className="h-2 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#007AFF] to-[#5856D6] transition-all"
-                    style={{ width: `${goal.progress}%` }}
-                  />
+            return (
+              <div key={goal.id} className="group">
+                <div className="mb-1 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{goal.emoji}</span>
+                    <span className="text-[13px] font-medium text-foreground dark:text-[#e5e5e7]">
+                      {goal.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {hasLinkedTodos && (
+                      <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        {stats.completed}/{stats.total}
+                      </span>
+                    )}
+                    <span className="text-[11px] font-medium text-[#007AFF]">{progress}%</span>
+                    <button
+                      onClick={() => deleteGoal(goal.id)}
+                      className="rounded p-0.5 text-secondary opacity-0 hover:text-red-500 group-hover:opacity-100"
+                    >
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={goal.progress}
-                  onChange={(e) => handleProgressChange(goal.id, Number(e.target.value))}
-                  className="absolute inset-0 h-2 w-full cursor-pointer opacity-0"
-                />
-              </div>
 
-              {goal.target_date && (
-                <p className="mt-1 text-[10px] text-secondary">
-                  목표일: {goal.target_date.slice(5).replace("-", "/")}
-                </p>
-              )}
-            </div>
-          ))}
+                {/* Progress bar */}
+                <div className="relative">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        hasLinkedTodos
+                          ? "bg-gradient-to-r from-emerald-400 to-emerald-500"
+                          : "bg-gradient-to-r from-[#007AFF] to-[#5856D6]"
+                      }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  {/* 연결된 할일이 없을 때만 수동 슬라이더 */}
+                  {!hasLinkedTodos && (
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={goal.progress}
+                      onChange={(e) => handleProgressChange(goal.id, Number(e.target.value))}
+                      className="absolute inset-0 h-2 w-full cursor-pointer opacity-0"
+                    />
+                  )}
+                </div>
+
+                {goal.target_date && (
+                  <p className="mt-1 text-[10px] text-secondary">
+                    목표일: {goal.target_date.slice(5).replace("-", "/")}
+                  </p>
+                )}
+              </div>
+            );
+          })}
 
           {/* Completed goals (collapsed) */}
           {completedGoals.length > 0 && (

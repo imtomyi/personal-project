@@ -2,7 +2,7 @@
 // 워크스페이스 위젯 타입 & 설정
 // ============================================
 
-export type WsWidgetId = "exercise" | "dday" | "habit" | "goals";
+export type WsWidgetId = "exercise" | "dday" | "habit" | "goals" | "daily-schedule"; // daily-schedule는 더 이상 위젯으로 사용하지 않지만 호환성 유지
 
 export type WsWidgetConfig = {
   id: WsWidgetId;
@@ -22,6 +22,7 @@ export const WS_WIDGET_REGISTRY: WsWidgetMeta[] = [
   { id: "dday", label: "디데이", emoji: "📌", description: "중요한 날까지 카운트다운" },
   { id: "habit", label: "습관 트래커", emoji: "✅", description: "매일 습관 체크 및 연속 달성 추적" },
   { id: "goals", label: "목표", emoji: "🎯", description: "목표 설정 및 진행도 관리" },
+  { id: "daily-schedule", label: "오늘 시간표", emoji: "📅", description: "반복 일정 + 수업 + 자동 공부 배분" },
 ];
 
 // ============================================
@@ -44,17 +45,6 @@ export type ExerciseEntry = {
 export type ExerciseDay = {
   date: string; // "YYYY-MM-DD"
   entries: ExerciseEntry[];
-};
-
-// ============================================
-// D-Day types
-// ============================================
-export type DdayEntry = {
-  id: string;
-  title: string;
-  date: string; // "YYYY-MM-DD"
-  emoji: string;
-  color: string; // tailwind color class
 };
 
 // ============================================

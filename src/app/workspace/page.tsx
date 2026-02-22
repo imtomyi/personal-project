@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -30,28 +30,180 @@ import GoalWidget from "@/components/widgets/GoalWidget";
 import WsWidgetPicker from "@/components/widgets/WsWidgetPicker";
 import SortableWsWidget from "@/components/widgets/SortableWsWidget";
 import { useDdayEntries } from "@/hooks/useDdayEntries";
-
-function renderWidget(id: WsWidgetId) {
-  switch (id) {
-    case "exercise":
-      return <ExerciseWidget />;
-    case "dday":
-      return <DdayWidget />;
-    case "habit":
-      return <HabitWidget />;
-    case "goals":
-      return <GoalWidget />;
-    default:
-      return null;
-  }
-}
+import RoutineManager from "@/components/RoutineManager";
+import OverdueTasksAlert from "@/components/OverdueTasksAlert";
+import DailySchedule from "@/components/DailySchedule";
+import DailyPlanTriage from "@/components/DailyPlanTriage";
+import { useDailyPlan } from "@/hooks/useDailyPlan";
+import { useCarryOverPlans } from "@/hooks/useCarryOverPlans";
+import { useRecurringTasks } from "@/hooks/useRecurringTasks";
+import { useHabits } from "@/hooks/useHabits";
+import { useToast } from "@/context/ToastContext";
+import { sortTodosBySchedulePriority, estimateMinutes } from "@/lib/autoScheduler";
+import type { Todo } from "@/lib/types";
 
 export default function WorkspacesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo } = useAllWorkspaceTodos();
   const { canvasTodos, canvasCourses, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
-  const ddayEntries = useDdayEntries();
+  const { entries: ddayEntries } = useDdayEntries();
+  const { showToast } = useToast();
+  const [showRoutineManager, setShowRoutineManager] = useState(false);
+  const [showOverdueAlert, setShowOverdueAlert] = useState(false);
+
+  // ── 통합 시간표용 hooks ──
+  const {
+    plans: dailyPlans,
+    triagedTodoIds,
+    addPlan,
+    addPlanBatch,
+    skipTodo,
+    updateSchedule: updateDailySchedule,
+  } = useDailyPlan();
+  const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
+  const { tasks: allRecurringTasks } = useRecurringTasks();
+  const { habitsWithTime } = useHabits();
+  const [showTriage, setShowTriage] = useState(false);
+  const todayStr = todayKST();
+
+  // ── 워크스페이스 맵 (시간표 블록에 워크스페이스 이름 표시용) ──
+  const workspaceMap = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const ws of workspaces) {
+      map.set(ws.id, { name: ws.name, color: (ws as Record<string, unknown>).color as string ?? "blue" });
+    }
+    return map;
+  }, [workspaces]);
+
+  // ── 이월 토스트 ──
+  useEffect(() => {
+    if (carriedOverCount > 0) {
+      showToast(`어제 미완료 ${carriedOverCount}개 할 일이 오늘로 이월되었습니다`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carriedOverCount]);
+
+  // ── 전체 워크스페이스 자동 배치 (하루 1회) ──
+  useEffect(() => {
+    if (todosLoading || carryOverProcessing) return;
+    const key = "auto_dist_global";
+    try {
+      if (localStorage.getItem(key) === todayStr) return;
+    } catch {
+      return;
+    }
+
+    const scheduledIds = new Set(dailyPlans.map((p) => p.todo_id));
+    const unplanned = todos.filter(
+      (t: WorkspaceTodo) =>
+        !t.is_completed &&
+        !t.parent_id &&
+        t.description !== SECTION_HEADER_MARKER &&
+        t.due_date &&
+        t.due_date <= todayStr &&
+        !scheduledIds.has(t.id),
+    );
+    if (unplanned.length === 0) {
+      try { localStorage.setItem(key, todayStr); } catch { /* ignore */ }
+      return;
+    }
+
+    const sorted = sortTodosBySchedulePriority(unplanned, todayStr);
+    const items = sorted.map((t) => ({
+      todoId: t.id,
+      estimatedMinutes: estimateMinutes(t),
+    }));
+    addPlanBatch(items).then(() => {
+      try { localStorage.setItem(key, todayStr); } catch { /* ignore */ }
+      showToast(`${items.length}개 할 일이 자동으로 시간표에 배치되었습니다`);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todosLoading, carryOverProcessing, dailyPlans, todayStr]);
+
+  // ── 시간표 핸들러 ──
+  const handleAutoDistributeTodayTasks = useCallback(async (todayTodos: Todo[]) => {
+    const sorted = sortTodosBySchedulePriority(todayTodos, todayStr);
+    const items = sorted.map((t) => ({
+      todoId: t.id,
+      estimatedMinutes: estimateMinutes(t),
+    }));
+    await addPlanBatch(items);
+    showToast(`${sorted.length}개 할 일이 시간표에 배치되었습니다`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayStr, addPlanBatch]);
+
+  const handleScheduleUpdateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "is_completed" | "status">>) => {
+    await updateAllTodo(id, updates);
+  }, [updateAllTodo]);
+
+  // ── 지연된 할 일 (전체 워크스페이스 통합) ──
+  const overdueTodos = useMemo(() => {
+    if (todosLoading) return [];
+    return todos.filter(
+      (t: WorkspaceTodo) =>
+        t.description !== SECTION_HEADER_MARKER &&
+        !t.is_completed &&
+        t.due_date &&
+        toDateStr(parseLocalDate(t.due_date)) < todayStr,
+    );
+  }, [todos, todosLoading, todayStr]);
+
+  // 하루 1회 지연 할일 알림 (메인 페이지 진입 시)
+  useEffect(() => {
+    if (todosLoading || overdueTodos.length === 0) return;
+    try {
+      const shownDate = localStorage.getItem("overdue_alert_shown_date");
+      if (shownDate !== todayStr) {
+        setShowOverdueAlert(true);
+      }
+    } catch {
+      // localStorage 접근 불가 시 무시
+    }
+  }, [todosLoading, overdueTodos.length, todayStr]);
+
+  // 지연 할일 핸들러
+  const handleOverdueDefer = useCallback(async (todoId: string) => {
+    await updateAllTodo(todoId, { due_date: todayStr });
+  }, [updateAllTodo, todayStr]);
+
+  const handleOverdueDeferAll = useCallback(async () => {
+    for (const todo of overdueTodos) {
+      await updateAllTodo(todo.id, { due_date: todayStr });
+    }
+  }, [overdueTodos, updateAllTodo, todayStr]);
+
+  const handleOverdueComplete = useCallback(async (todoId: string) => {
+    await updateAllTodo(todoId, { is_completed: true });
+    showToast("완료 처리되었습니다");
+  }, [updateAllTodo, showToast]);
+
+  const handleOverdueAlertClose = useCallback(() => {
+    try {
+      localStorage.setItem("overdue_alert_shown_date", todayStr);
+    } catch {
+      // ignore
+    }
+    setShowOverdueAlert(false);
+  }, [todayStr]);
+
+  // renderWidget — component 내부에서 todos 접근 가능
+  function renderWidget(id: WsWidgetId) {
+    switch (id) {
+      case "exercise":
+        return <ExerciseWidget />;
+      case "dday":
+        return <DdayWidget />;
+      case "habit":
+        return <HabitWidget onOpenRoutineManager={() => setShowRoutineManager(true)} />;
+      case "goals":
+        return <GoalWidget allTodos={todos} />;
+      case "daily-schedule":
+        return null; // 통합 시간표가 캘린더 아래에 배치됨
+      default:
+        return null;
+    }
+  }
 
   // Merge workspace todos + canvas assignments
   const mergedTodos = [...todos, ...canvasTodos];
@@ -533,7 +685,7 @@ export default function WorkspacesPage() {
                   {todayStats.dueToday.length > 0 && (
                     <div className="mb-3">
                       <div className="mb-2 flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        <span className="text-[11px]">📌</span>
                         <span className="text-[12px] font-medium text-foreground dark:text-[#e5e5e7]">진행 중 {todayStats.dueToday.length}개</span>
                       </div>
                       <div className="space-y-0.5">
@@ -577,6 +729,33 @@ export default function WorkspacesPage() {
             </div>
           </div>
         </div>
+
+        {/* ── 통합 시간표 (캘린더 아래) ── */}
+        <div className="mt-8">
+          <DailySchedule
+            todos={todos}
+            recurringTasks={allRecurringTasks}
+            onUpdate={handleScheduleUpdateTodo}
+            habits={habitsWithTime}
+            dailyPlans={dailyPlans}
+            onOpenTriage={() => setShowTriage(true)}
+            onScheduleUpdate={updateDailySchedule}
+            onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
+            workspaceMap={workspaceMap}
+          />
+        </div>
+
+        {/* 트리아지 모달 */}
+        {showTriage && (
+          <DailyPlanTriage
+            todos={todos}
+            triagedTodoIds={triagedTodoIds}
+            onPlan={addPlan}
+            onSkip={skipTodo}
+            onComplete={() => {}}
+            onClose={() => setShowTriage(false)}
+          />
+        )}
 
         {/* ── 위젯 영역 (전체 폭 2열 그리드) ── */}
         {visibleWidgets.length > 0 && (
@@ -716,6 +895,21 @@ export default function WorkspacesPage() {
           </div>
         )}
       </main>
+
+      {showOverdueAlert && overdueTodos.length > 0 && (
+        <OverdueTasksAlert
+          overdueTodos={overdueTodos}
+          onDefer={handleOverdueDefer}
+          onComplete={handleOverdueComplete}
+          onSkip={() => {}}
+          onDeferAll={handleOverdueDeferAll}
+          onClose={handleOverdueAlertClose}
+        />
+      )}
+
+      {showRoutineManager && (
+        <RoutineManager onClose={() => setShowRoutineManager(false)} />
+      )}
     </div>
   );
 }

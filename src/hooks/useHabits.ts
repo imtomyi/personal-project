@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "./useRealtimeSubscription";
 import type { Habit, HabitLog } from "@/lib/types";
+
+const HABITS_STORAGE_KEY = "ws_habits_data";
+const HABIT_CHECKS_STORAGE_KEY = "ws_habit_checks_data";
 
 export function useHabits() {
   const { user } = useAuth();
@@ -12,6 +15,7 @@ export function useHabits() {
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+  const migratedRef = useRef(false);
 
   const fetchHabits = useCallback(async () => {
     if (!user) return;
@@ -22,6 +26,47 @@ export function useHabits() {
       .order("sort_order", { ascending: true });
     setHabits(data ?? []);
     setLoading(false);
+
+    // 1회성 localStorage → Supabase 마이그레이션
+    if (!migratedRef.current) {
+      migratedRef.current = true;
+      try {
+        const storedHabits = localStorage.getItem(HABITS_STORAGE_KEY);
+        if (storedHabits && (!data || data.length === 0)) {
+          const localHabits = JSON.parse(storedHabits) as Array<{
+            id: string;
+            name: string;
+            emoji: string;
+            createdAt?: string;
+          }>;
+          if (localHabits.length > 0) {
+            const toInsert = localHabits.map((h, i) => ({
+              user_id: user.id,
+              name: h.name,
+              emoji: h.emoji || "✅",
+              sort_order: i,
+              is_active: true,
+            }));
+            await supabase.from("habits").insert(toInsert);
+            localStorage.removeItem(HABITS_STORAGE_KEY);
+            localStorage.removeItem(HABIT_CHECKS_STORAGE_KEY);
+            // Re-fetch
+            const { data: newData } = await supabase
+              .from("habits")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("sort_order", { ascending: true });
+            setHabits(newData ?? []);
+          }
+        } else if (storedHabits && data && data.length > 0) {
+          // Supabase에 이미 데이터가 있으면 localStorage 정리
+          localStorage.removeItem(HABITS_STORAGE_KEY);
+          localStorage.removeItem(HABIT_CHECKS_STORAGE_KEY);
+        }
+      } catch {
+        // 마이그레이션 실패 시 무시
+      }
+    }
   }, [user, supabase]);
 
   const fetchLogs = useCallback(async () => {
@@ -59,7 +104,11 @@ export function useHabits() {
     skip: !user,
   });
 
-  async function addHabit(name: string, emoji: string = "✅") {
+  async function addHabit(
+    name: string,
+    emoji: string = "✅",
+    options?: { time_start?: string; time_end?: string; days_of_week?: number[] },
+  ) {
     if (!user) return;
     const nextOrder = habits.length > 0 ? Math.max(...habits.map((h) => h.sort_order)) + 1 : 0;
 
@@ -68,9 +117,24 @@ export function useHabits() {
       name,
       emoji,
       sort_order: nextOrder,
+      time_start: options?.time_start || null,
+      time_end: options?.time_end || null,
+      days_of_week: options?.days_of_week || null,
     });
     if (error) throw error;
     await fetchHabits();
+  }
+
+  async function updateHabit(
+    id: string,
+    updates: Partial<Pick<Habit, "name" | "emoji" | "frequency" | "is_active" | "time_start" | "time_end" | "days_of_week">>,
+  ) {
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, ...updates } : h)));
+    const { error } = await supabase.from("habits").update(updates).eq("id", id);
+    if (error) {
+      await fetchHabits();
+      throw error;
+    }
   }
 
   async function deleteHabit(id: string) {
@@ -151,11 +215,16 @@ export function useHabits() {
     return streak;
   }
 
+  // 시간표 연동용: 시간이 설정된 활성 습관만
+  const habitsWithTime = habits.filter((h) => h.is_active && h.time_start);
+
   return {
     habits,
+    habitsWithTime,
     logs,
     loading,
     addHabit,
+    updateHabit,
     deleteHabit,
     toggleLog,
     getStreak,

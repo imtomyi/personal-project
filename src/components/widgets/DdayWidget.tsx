@@ -1,30 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DdayEntry } from "@/lib/workspace-widgets";
-import { DDAY_STORAGE_KEY } from "@/lib/workspace-widgets";
-import { todayKST, parseLocalDate, toDateStr } from "@/lib/date";
+import { useState, useMemo } from "react";
+import { useDdayEntries } from "@/hooks/useDdayEntries";
+import { todayKST, parseLocalDate } from "@/lib/date";
 import { DDAY_COLOR_OPTIONS, DDAY_EMOJI_OPTIONS, WEEKDAY_LABELS } from "@/lib/constants";
 
 const COLOR_OPTIONS = DDAY_COLOR_OPTIONS;
 const EMOJI_OPTIONS = DDAY_EMOJI_OPTIONS;
-
-function loadData(): DdayEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const stored = localStorage.getItem(DDAY_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveData(data: DdayEntry[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(DDAY_STORAGE_KEY, JSON.stringify(data));
-  // 같은 탭 내 다른 컴포넌트에 변경 알림 (비동기로 dispatch하여 렌더 중 setState 방지)
-  setTimeout(() => window.dispatchEvent(new Event("dday-updated")), 0);
-}
 
 function getDaysUntil(targetDate: string): number {
   const today = parseLocalDate(todayKST());
@@ -47,9 +29,9 @@ function MiniCalendar({
   onSelect,
   accentColor,
 }: {
-  selected: string; // "YYYY-MM-DD" or ""
+  selected: string;
   onSelect: (dateStr: string) => void;
-  accentColor: string; // COLOR_OPTIONS value
+  accentColor: string;
 }) {
   const todayStr = todayKST();
   const initial = selected || todayStr;
@@ -90,7 +72,6 @@ function MiniCalendar({
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-2 dark:border-gray-600 dark:bg-gray-700">
-      {/* 월 네비게이션 */}
       <div className="mb-1.5 flex items-center justify-between">
         <button onClick={prev} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-300">
           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -105,7 +86,6 @@ function MiniCalendar({
         </button>
       </div>
 
-      {/* 요일 헤더 */}
       <div className="mb-0.5 grid grid-cols-7 text-center">
         {WEEKDAY_LABELS.map((d, i) => (
           <span
@@ -119,7 +99,6 @@ function MiniCalendar({
         ))}
       </div>
 
-      {/* 날짜 그리드 */}
       {weeks.map((week, wi) => (
         <div key={wi} className="grid grid-cols-7">
           {week.map((ds, di) => {
@@ -160,51 +139,26 @@ function MiniCalendar({
    DdayWidget 메인
    ========================================== */
 export default function DdayWidget() {
-  const [entries, setEntries] = useState<DdayEntry[]>([]);
+  const { entries, loading, addEntry, removeEntry } = useDdayEntries();
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newEmoji, setNewEmoji] = useState("📌");
   const [newColor, setNewColor] = useState("blue");
 
-  useEffect(() => {
-    setEntries(loadData());
-  }, []);
-
-  const addEntry = useCallback(() => {
+  async function handleAdd() {
     if (!newTitle.trim() || !newDate) return;
-    const entry: DdayEntry = {
-      id: crypto.randomUUID(),
-      title: newTitle.trim(),
-      date: newDate,
-      emoji: newEmoji,
-      color: newColor,
-    };
-    setEntries((prev) => {
-      const updated = [...prev, entry].sort((a, b) => {
-        const da = getDaysUntil(a.date);
-        const db = getDaysUntil(b.date);
-        if (da >= 0 && db >= 0) return da - db;
-        if (da < 0 && db < 0) return da - db;
-        return da >= 0 ? -1 : 1;
-      });
-      saveData(updated);
-      return updated;
-    });
-    setNewTitle("");
-    setNewDate("");
-    setNewEmoji("📌");
-    setNewColor("blue");
-    setShowAdd(false);
-  }, [newTitle, newDate, newEmoji, newColor]);
-
-  const removeEntry = useCallback((id: string) => {
-    setEntries((prev) => {
-      const updated = prev.filter((e) => e.id !== id);
-      saveData(updated);
-      return updated;
-    });
-  }, []);
+    try {
+      await addEntry(newTitle.trim(), newDate, newEmoji, newColor);
+      setNewTitle("");
+      setNewDate("");
+      setNewEmoji("📌");
+      setNewColor("blue");
+      setShowAdd(false);
+    } catch {
+      // ignore
+    }
+  }
 
   // Sort entries: upcoming first, then past
   const sortedEntries = [...entries].sort((a, b) => {
@@ -214,6 +168,14 @@ export default function DdayWidget() {
     if (da < 0 && db < 0) return db - da;
     return da >= 0 ? -1 : 1;
   });
+
+  if (loading) {
+    return (
+      <div className="card-surface flex items-center justify-center p-5 py-10">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="card-surface p-5">
@@ -294,7 +256,6 @@ export default function DdayWidget() {
             onKeyDown={(e) => { if (e.key === "Escape") setShowAdd(false); }}
           />
 
-          {/* 커스텀 미니 캘린더 */}
           <div className="mb-2">
             {newDate && (
               <div className="mb-1.5 flex items-center gap-2">
@@ -317,7 +278,6 @@ export default function DdayWidget() {
             />
           </div>
 
-          {/* Emoji picker */}
           <div className="mb-2 flex flex-wrap gap-1">
             {EMOJI_OPTIONS.map((e) => (
               <button
@@ -334,7 +294,6 @@ export default function DdayWidget() {
             ))}
           </div>
 
-          {/* Color picker */}
           <div className="mb-3 flex gap-1.5">
             {COLOR_OPTIONS.map((c) => (
               <button
@@ -351,7 +310,7 @@ export default function DdayWidget() {
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowAdd(false)} className="px-3 py-1 text-[11px] text-gray-400 hover:text-gray-600">취소</button>
             <button
-              onClick={addEntry}
+              onClick={handleAdd}
               disabled={!newTitle.trim() || !newDate}
               className="rounded-lg bg-blue-500 px-4 py-1 text-[11px] font-medium text-white hover:bg-blue-600 disabled:opacity-50"
             >

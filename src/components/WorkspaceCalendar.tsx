@@ -8,7 +8,7 @@ import { parseLocalDate, todayKST, toDateStr, nowKST, fmtMD, getDurationInDays, 
 import { WEEKDAY_LABELS, DDAY_COLOR_MAP } from "@/lib/constants";
 import type { WorkspaceTodo } from "@/hooks/useAllWorkspaceTodos";
 import { getWorkspaceColorByKey } from "@/hooks/useAllWorkspaceTodos";
-import type { DdayEntry } from "@/lib/workspace-widgets";
+import type { DdayEntry } from "@/lib/types";
 
 type CanvasCourseInfo = { id: string; name: string };
 
@@ -350,8 +350,8 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
           )}
           {stats.dueToday > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              <span className="text-xs font-medium text-amber-600 dark:text-amber-400">{stats.dueToday} 오늘</span>
+              <span className="text-xs">📌</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{stats.dueToday} 오늘</span>
             </div>
           )}
 
