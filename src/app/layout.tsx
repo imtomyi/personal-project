@@ -5,6 +5,7 @@ import { ToastProvider } from "@/context/ToastContext";
 import GlobalShortcuts from "@/components/GlobalShortcuts";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import InstallPrompt from "@/components/InstallPrompt";
+import PullToRefresh from "@/components/PullToRefresh";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -50,7 +51,9 @@ export default function RootLayout({
             <ToastProvider>
               <ServiceWorkerRegister />
               <GlobalShortcuts />
-              {children}
+              <PullToRefresh>
+                {children}
+              </PullToRefresh>
               <InstallPrompt />
             </ToastProvider>
           </AuthProvider>
