@@ -13,7 +13,6 @@ import {
   type ScheduleBlockType,
 } from "@/lib/autoScheduler";
 import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
-import { getWorkspaceColorByKey } from "@/hooks/useAllWorkspaceTodos";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -168,56 +167,64 @@ type ColumnLayout = {
 /**
  * 겹치는 블록들을 그룹으로 묶고, 그룹 내에서 각 블록에 컬럼 인덱스를 할당.
  * Google Calendar / Outlook 스타일의 가로 분할 레이아웃.
+ *
+ * minBlockMinutes: 최소 블록 높이에 해당하는 분 수 (짧은 블록이 시각적으로 차지하는 최소 시간).
+ * 예: HOUR_HEIGHT=48, minHeight=24px → 24/48*60 = 30분
  */
-function computeColumnLayout(blocks: ScheduleBlock[]): Map<string, ColumnLayout> {
+function computeColumnLayout(blocks: ScheduleBlock[], minBlockMinutes: number): Map<string, ColumnLayout> {
   const result = new Map<string, ColumnLayout>();
   if (blocks.length === 0) return result;
+
+  // 시각적 endMin 계산 (짧은 블록은 minBlockMinutes만큼 확장)
+  function visualEnd(b: ScheduleBlock): number {
+    return Math.max(b.endMin, b.startMin + minBlockMinutes);
+  }
 
   // 시작시간 기준 정렬 (같으면 긴 블록 먼저)
   const sorted = [...blocks].sort((a, b) => a.startMin - b.startMin || (b.endMin - b.startMin) - (a.endMin - a.startMin));
 
-  // 겹치는 블록을 연결 그래프로 그룹핑
+  // 겹치는 블록을 연결 그래프로 그룹핑 (시각적 겹침 기준)
   const groups: ScheduleBlock[][] = [];
   let currentGroup: ScheduleBlock[] = [];
   let groupEnd = -1;
 
   for (const block of sorted) {
     if (currentGroup.length === 0 || block.startMin < groupEnd) {
-      // 현재 그룹에 속함 (겹침)
+      // 현재 그룹에 속함 (시각적 겹침)
       currentGroup.push(block);
-      groupEnd = Math.max(groupEnd, block.endMin);
+      groupEnd = Math.max(groupEnd, visualEnd(block));
     } else {
       // 새 그룹 시작
       groups.push(currentGroup);
       currentGroup = [block];
-      groupEnd = block.endMin;
+      groupEnd = visualEnd(block);
     }
   }
   if (currentGroup.length > 0) groups.push(currentGroup);
 
-  // 각 그룹 내에서 컬럼 할당 (greedy)
+  // 각 그룹 내에서 컬럼 할당 (greedy, 시각적 endMin 기준)
   for (const group of groups) {
-    const colEndTimes: number[] = []; // 각 컬럼의 마지막 endMin
+    const colVisualEndTimes: number[] = []; // 각 컬럼의 마지막 시각적 endMin
 
     for (const block of group) {
       // 기존 컬럼 중 이 블록을 넣을 수 있는 가장 왼쪽 컬럼 찾기
       let placed = false;
-      for (let c = 0; c < colEndTimes.length; c++) {
-        if (colEndTimes[c] <= block.startMin) {
-          colEndTimes[c] = block.endMin;
-          result.set(block.id, { colIndex: c, totalCols: 0 }); // totalCols는 나중에
+      for (let c = 0; c < colVisualEndTimes.length; c++) {
+        if (colVisualEndTimes[c] <= block.startMin) {
+          colVisualEndTimes[c] = visualEnd(block);
+          result.set(block.id, { colIndex: c, totalCols: 0 });
           placed = true;
           break;
         }
       }
       if (!placed) {
-        result.set(block.id, { colIndex: colEndTimes.length, totalCols: 0 });
-        colEndTimes.push(block.endMin);
+        result.set(block.id, { colIndex: colVisualEndTimes.length, totalCols: 0 });
+        colVisualEndTimes.push(visualEnd(block));
       }
     }
 
     // totalCols 업데이트
-    const totalCols = colEndTimes.length;
+    const totalCols = colVisualEndTimes.length;
     for (const block of group) {
       const layout = result.get(block.id)!;
       layout.totalCols = totalCols;
@@ -337,17 +344,31 @@ export default function DailySchedule({
   }
 
   // 워크스페이스 색상으로 블록 색상 결정 (todo/dday 타입일 때 해당 워크스페이스 색상 사용)
+  // 워크스페이스 색상 키 → 연한 테두리/배경 매핑 (BLOCK_COLORS와 동일한 톤)
+  const WS_BLOCK_COLORS: Record<string, { border: string; bg: string; text: string }> = {
+    blue:    { border: "border-blue-200 dark:border-blue-800",    bg: "bg-blue-50 dark:bg-blue-900/20",    text: "text-blue-700 dark:text-blue-300" },
+    purple:  { border: "border-purple-200 dark:border-purple-800",  bg: "bg-purple-50 dark:bg-purple-900/20",  text: "text-purple-700 dark:text-purple-300" },
+    emerald: { border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-300" },
+    amber:   { border: "border-amber-200 dark:border-amber-800",   bg: "bg-amber-50 dark:bg-amber-900/20",   text: "text-amber-700 dark:text-amber-300" },
+    rose:    { border: "border-rose-200 dark:border-rose-800",    bg: "bg-rose-50 dark:bg-rose-900/20",    text: "text-rose-700 dark:text-rose-300" },
+    cyan:    { border: "border-cyan-200 dark:border-cyan-800",    bg: "bg-cyan-50 dark:bg-cyan-900/20",    text: "text-cyan-700 dark:text-cyan-300" },
+    orange:  { border: "border-orange-200 dark:border-orange-800",  bg: "bg-orange-50 dark:bg-orange-900/20",  text: "text-orange-700 dark:text-orange-300" },
+    indigo:  { border: "border-indigo-200 dark:border-indigo-800",  bg: "bg-indigo-50 dark:bg-indigo-900/20",  text: "text-indigo-700 dark:text-indigo-300" },
+    teal:    { border: "border-teal-200 dark:border-teal-800",    bg: "bg-teal-50 dark:bg-teal-900/20",    text: "text-teal-700 dark:text-teal-300" },
+    pink:    { border: "border-pink-200 dark:border-pink-800",    bg: "bg-pink-50 dark:bg-pink-900/20",    text: "text-pink-700 dark:text-pink-300" },
+  };
+
   function getBlockColorResolved(block: ScheduleBlock): BlockColorConfig {
     // todo 블록 → 워크스페이스 색상 사용
     if (block.todoId && workspaceMap) {
       const todo = todos.find((t) => t.id === block.todoId);
       const wsInfo = todo ? workspaceMap.get(todo.workspace_id) : null;
-      if (wsInfo?.color) {
-        const wsColor = getWorkspaceColorByKey(wsInfo.color);
+      if (wsInfo?.color && WS_BLOCK_COLORS[wsInfo.color]) {
+        const wc = WS_BLOCK_COLORS[wsInfo.color];
         return {
-          border: wsColor.border.replace("border-l-", "border-"),
-          bg: wsColor.bg,
-          text: wsColor.text,
+          border: wc.border,
+          bg: wc.bg,
+          text: wc.text,
           icon: block.type === "dday" ? "📌" : "",
           label: wsInfo.name,
         };
@@ -414,7 +435,9 @@ export default function DailySchedule({
   }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today, ddayEntries]);
 
   // 겹침 컬럼 레이아웃 계산
-  const columnLayout = useMemo(() => computeColumnLayout(blocks), [blocks]);
+  // minBlockMinutes: 최소 블록 높이(24px or 18px)에 해당하는 분 수
+  const minBlockMinutes = compact ? (18 / 30) * 60 : (24 / 48) * 60; // compact: 36min, full: 30min
+  const columnLayout = useMemo(() => computeColumnLayout(blocks, minBlockMinutes), [blocks, minBlockMinutes]);
 
   // 가시 범위 계산 (블록이 있는 시간대 + 현재 시각 기준)
   const visibleRange = useMemo(
