@@ -112,6 +112,37 @@ const END_HOUR = 24;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
 const SNAP_MINUTES = 15;
 
+/**
+ * 블록이 있는 시간대만 보여주는 "스마트 가시 범위" 계산.
+ * 블록 근처 시간 + 현재 시각 근처만 표시하고, 빈 구간은 줄여서 보여줌.
+ */
+function getVisibleRange(
+  blocks: ScheduleBlock[],
+  currentMinutes: number,
+): { startHour: number; endHour: number } {
+  if (blocks.length === 0) {
+    const h = Math.floor(currentMinutes / 60);
+    return {
+      startHour: Math.max(6, h - 1),
+      endHour: Math.min(24, h + 3),
+    };
+  }
+  const minStart = Math.min(...blocks.map((b) => b.startMin), currentMinutes);
+  const maxEnd = Math.max(...blocks.map((b) => b.endMin), currentMinutes + 60);
+  // 앞뒤 1시간 여유
+  const startHour = Math.max(6, Math.floor(minStart / 60) - 1);
+  const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
+  // 최소 4시간은 표시
+  if (endHour - startHour < 4) {
+    const mid = (startHour + endHour) / 2;
+    return {
+      startHour: Math.max(6, Math.floor(mid - 2)),
+      endHour: Math.min(24, Math.ceil(mid + 2)),
+    };
+  }
+  return { startHour, endHour };
+}
+
 // ============================================
 // Drag state type
 // ============================================
@@ -142,7 +173,7 @@ export default function DailySchedule({
   onAutoDistributeTodayTasks,
   workspaceMap,
 }: DailyScheduleProps) {
-  const HOUR_HEIGHT = compact ? 30 : 60;
+  const HOUR_HEIGHT = compact ? 30 : 48;
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -170,20 +201,20 @@ export default function DailySchedule({
   // Current time position
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const currentTopPx = ((currentMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
 
   // 일일 계획 활성 여부
   const hasActivePlans = dailyPlans && dailyPlans.some((p) => !p.is_skipped && p.estimated_minutes > 0);
 
-  // Block positioning
-  function getBlockStyle(block: ScheduleBlock) {
+  // Block positioning — visStartHour 기준 (가시 범위만 표시)
+  // NOTE: visStartHour는 blocks 이후에 결정되므로 이 함수는 렌더 시에만 호출
+  function getBlockStyle(block: ScheduleBlock, refStartHour: number) {
     // 드래그 중인 블록은 dragState의 좌표 사용
     if (dragState && dragState.blockId === block.id) {
-      const topPx = ((dragState.currentStartMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+      const topPx = ((dragState.currentStartMin - refStartHour * 60) / 60) * HOUR_HEIGHT;
       const heightPx = ((dragState.currentEndMin - dragState.currentStartMin) / 60) * HOUR_HEIGHT;
       return { top: `${topPx}px`, height: `${Math.max(heightPx, compact ? 18 : 24)}px` };
     }
-    const topPx = ((block.startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+    const topPx = ((block.startMin - refStartHour * 60) / 60) * HOUR_HEIGHT;
     const heightPx = ((block.endMin - block.startMin) / 60) * HOUR_HEIGHT;
     return { top: `${topPx}px`, height: `${Math.max(heightPx, compact ? 18 : 24)}px` };
   }
@@ -238,6 +269,16 @@ export default function DailySchedule({
     }
     return baseBlocks;
   }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today]);
+
+  // 가시 범위 계산 (블록이 있는 시간대 + 현재 시각 기준)
+  const visibleRange = useMemo(
+    () => getVisibleRange(blocks, currentMinutes),
+    [blocks, currentMinutes],
+  );
+  const visStartHour = compact ? START_HOUR : visibleRange.startHour;
+  const visEndHour = compact ? END_HOUR : visibleRange.endHour;
+  const visTotalHours = visEndHour - visStartHour;
+  const currentTopPx = ((currentMinutes - visStartHour * 60) / 60) * HOUR_HEIGHT;
 
   // Unscheduled todos
   const scheduledTodoIds = new Set(
@@ -444,22 +485,23 @@ export default function DailySchedule({
         )}
 
         <div
-          className={`relative overflow-hidden ${
-            compact ? "rounded-lg" : "card-surface p-0"
+          className={`relative ${
+            compact ? "overflow-hidden rounded-lg" : "card-surface overflow-y-auto p-0"
           }`}
+          style={compact ? undefined : { maxWidth: "600px", maxHeight: "480px" }}
         >
           <div
             ref={timelineRef}
             className="relative select-none"
             style={{
-              height: `${TOTAL_HOURS * HOUR_HEIGHT}px`,
+              height: `${visTotalHours * HOUR_HEIGHT}px`,
               touchAction: dragState ? "none" : "auto",
             }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
           >
             {/* Hour lines */}
-            {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => (
+            {Array.from({ length: visTotalHours + 1 }, (_, i) => (
               <div
                 key={i}
                 className="absolute left-0 right-0 flex items-start border-t border-black/[0.04] dark:border-white/[0.06]"
@@ -472,15 +514,15 @@ export default function DailySchedule({
                       : "w-12 text-[10px]"
                   }`}
                 >
-                  {String(START_HOUR + i).padStart(2, "0")}:00
+                  {String(visStartHour + i).padStart(2, "0")}:00
                 </span>
                 <div className="flex-1" />
               </div>
             ))}
 
             {/* Current time line */}
-            {currentMinutes >= START_HOUR * 60 &&
-              currentMinutes <= END_HOUR * 60 && (
+            {currentMinutes >= visStartHour * 60 &&
+              currentMinutes <= visEndHour * 60 && (
                 <div
                   className={`absolute right-0 z-20 flex items-center ${
                     compact ? "left-8" : "left-12"
@@ -498,7 +540,7 @@ export default function DailySchedule({
 
             {/* Ghost block (original position during drag) */}
             {dragState && (() => {
-              const ghostTop = ((dragState.initialStartMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+              const ghostTop = ((dragState.initialStartMin - visStartHour * 60) / 60) * HOUR_HEIGHT;
               const ghostHeight = ((dragState.initialEndMin - dragState.initialStartMin) / 60) * HOUR_HEIGHT;
               return (
                 <div
@@ -509,8 +551,8 @@ export default function DailySchedule({
             })()}
 
             {/* Schedule blocks */}
-            {blocks.map((block) => {
-              const style = getBlockStyle(block);
+            {blocks.filter(b => b.endMin > visStartHour * 60 && b.startMin < visEndHour * 60).map((block) => {
+              const style = getBlockStyle(block, visStartHour);
               const colorCfg = getBlockColor(block);
               const isDragging = dragState?.blockId === block.id;
               const isDraggable = !!block.planId && !compact;
