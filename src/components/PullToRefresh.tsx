@@ -111,83 +111,83 @@ export default function PullToRefresh({
   const progress = Math.min(pullDistance / threshold, 1);
   const isTriggered = pullDistance >= threshold;
 
+  // 아이콘 위치: pullDistance 중앙에 배치 (아이콘+라벨 약 56px)
+  const indicatorHeight = 56;
+  const indicatorY = Math.max((pullDistance - indicatorHeight) / 2, 4);
+
   return (
     <div ref={containerRef} className="relative">
-      {/* Pull indicator */}
-      <div
-        className="pointer-events-none fixed left-0 right-0 top-0 z-[200] flex items-start justify-center overflow-hidden"
-        style={{
-          height: isVisible ? `${pullDistance}px` : 0,
-          transition: isPulling.current ? "none" : "height 0.3s cubic-bezier(0.2, 0, 0, 1)",
-        }}
-      >
+      {/* Pull indicator — overflow 없이 고정 위치 */}
+      {isVisible && (
         <div
-          className="mt-2 flex flex-col items-center"
+          className="pointer-events-none fixed left-0 right-0 top-0 z-[200] flex justify-center"
           style={{
-            opacity: Math.min(progress * 1.5, 1),
-            transform: `translateY(${Math.max(pullDistance - 40, 0)}px)`,
-            transition: isPulling.current ? "none" : "all 0.3s cubic-bezier(0.2, 0, 0, 1)",
+            transform: `translateY(${indicatorY}px)`,
+            transition: isPulling.current ? "none" : "transform 0.3s cubic-bezier(0.2, 0, 0, 1)",
           }}
         >
-          {/* Spinner / Arrow */}
           <div
-            className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg ${
-              isRefreshing
-                ? "bg-[#5856D6] text-white"
-                : isTriggered
+            className="flex flex-col items-center"
+            style={{
+              opacity: Math.min(progress * 1.5, 1),
+              transition: isPulling.current ? "none" : "opacity 0.3s cubic-bezier(0.2, 0, 0, 1)",
+            }}
+          >
+            {/* Spinner / Arrow */}
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-full shadow-lg ${
+                isRefreshing || isTriggered
                   ? "bg-[#5856D6] text-white"
                   : "bg-white text-[#5856D6] dark:bg-[#2c2c2e] dark:text-[#a5a4f3]"
-            }`}
-            style={{
-              transition: isPulling.current ? "none" : "all 0.2s ease",
-            }}
-          >
-            {isRefreshing ? (
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle
-                  cx="12" cy="12" r="10"
-                  stroke="currentColor" strokeWidth="3"
+              }`}
+            >
+              {isRefreshing ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle
+                    cx="12" cy="12" r="10"
+                    stroke="currentColor" strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeDasharray="50 50"
+                    strokeDashoffset="0"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
                   strokeLinecap="round"
-                  strokeDasharray="50 50"
-                  strokeDashoffset="0"
-                />
-              </svg>
-            ) : (
-              <svg
-                className="h-4 w-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{
-                  transform: `rotate(${isTriggered ? 180 : progress * 180}deg)`,
-                  transition: isPulling.current ? "none" : "transform 0.2s ease",
-                }}
-              >
-                <path d="M12 19V5" />
-                <path d="M5 12l7-7 7 7" />
-              </svg>
-            )}
-          </div>
+                  strokeLinejoin="round"
+                  style={{
+                    transform: `rotate(${isTriggered ? 180 : progress * 180}deg)`,
+                    transition: isPulling.current ? "none" : "transform 0.2s ease",
+                  }}
+                >
+                  <path d="M12 19V5" />
+                  <path d="M5 12l7-7 7 7" />
+                </svg>
+              )}
+            </div>
 
-          {/* Label */}
-          <span
-            className={`mt-1.5 text-[11px] font-medium ${
-              isRefreshing || isTriggered
-                ? "text-[#5856D6] dark:text-[#a5a4f3]"
-                : "text-secondary"
-            }`}
-            style={{
-              opacity: progress > 0.3 ? 1 : 0,
-              transition: "opacity 0.15s ease",
-            }}
-          >
-            {isRefreshing ? "새로고침 중..." : isTriggered ? "놓으면 새로고침" : "당겨서 새로고침"}
-          </span>
+            {/* Label */}
+            <span
+              className={`mt-1 text-[11px] font-medium ${
+                isRefreshing || isTriggered
+                  ? "text-[#5856D6] dark:text-[#a5a4f3]"
+                  : "text-secondary"
+              }`}
+              style={{
+                opacity: progress > 0.3 ? 1 : 0,
+                transition: "opacity 0.15s ease",
+              }}
+            >
+              {isRefreshing ? "새로고침 중..." : isTriggered ? "놓으면 새로고침" : "당겨서 새로고침"}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content offset when pulling */}
       <div
