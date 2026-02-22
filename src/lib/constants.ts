@@ -65,12 +65,13 @@ export const KHU_QUICK_LINKS = [
 // ============================================
 
 export const SESSION_DURATION_PRESETS = [
+  { label: "10분", value: 10 },
+  { label: "20분", value: 20 },
   { label: "30분", value: 30 },
+  { label: "45분", value: 45 },
   { label: "1시간", value: 60 },
   { label: "1.5시간", value: 90 },
   { label: "2시간", value: 120 },
-  { label: "2.5시간", value: 150 },
-  { label: "3시간", value: 180 },
 ] as const;
 
 // ============================================

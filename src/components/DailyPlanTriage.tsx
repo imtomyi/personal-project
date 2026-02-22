@@ -218,7 +218,7 @@ export default function DailyPlanTriage({
               <p className="mb-2 text-[12px] font-medium text-secondary">
                 ⏱️ 예상 소요 시간
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-wrap gap-2">
                 {SESSION_DURATION_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
