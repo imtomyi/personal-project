@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useDdayEntries } from "@/hooks/useDdayEntries";
 import { todayKST, parseLocalDate } from "@/lib/date";
-import { DDAY_COLOR_OPTIONS, DDAY_EMOJI_OPTIONS, WEEKDAY_LABELS } from "@/lib/constants";
+import { DDAY_COLOR_OPTIONS, DDAY_EMOJI_OPTIONS, WEEKDAY_LABELS, SESSION_DURATION_PRESETS } from "@/lib/constants";
 
 const COLOR_OPTIONS = DDAY_COLOR_OPTIONS;
 const EMOJI_OPTIONS = DDAY_EMOJI_OPTIONS;
@@ -19,6 +19,13 @@ function formatDday(days: number): string {
   if (days === 0) return "D-DAY";
   if (days > 0) return `D-${days}`;
   return `D+${Math.abs(days)}`;
+}
+
+function formatMinutes(min: number): string {
+  if (min < 60) return `${min}분`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m > 0 ? `${h}시간 ${m}분` : `${h}시간`;
 }
 
 /* ==========================================
@@ -139,21 +146,23 @@ function MiniCalendar({
    DdayWidget 메인
    ========================================== */
 export default function DdayWidget() {
-  const { entries, loading, addEntry, removeEntry } = useDdayEntries();
+  const { entries, loading, addEntry, updateEntry, removeEntry } = useDdayEntries();
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newEmoji, setNewEmoji] = useState("📌");
   const [newColor, setNewColor] = useState("blue");
+  const [newMinutes, setNewMinutes] = useState(30);
 
   async function handleAdd() {
     if (!newTitle.trim() || !newDate) return;
     try {
-      await addEntry(newTitle.trim(), newDate, newEmoji, newColor);
+      await addEntry(newTitle.trim(), newDate, newEmoji, newColor, newMinutes);
       setNewTitle("");
       setNewDate("");
       setNewEmoji("📌");
       setNewColor("blue");
+      setNewMinutes(30);
       setShowAdd(false);
     } catch {
       // ignore
@@ -188,9 +197,9 @@ export default function DdayWidget() {
         </span>
       </div>
 
-      {/* D-day entries */}
+      {/* D-day entries — 1열 리스트 */}
       {sortedEntries.length > 0 ? (
-        <div className="mb-3 grid grid-cols-2 gap-3">
+        <div className="mb-3 space-y-2">
           {sortedEntries.map((entry) => {
             const days = getDaysUntil(entry.date);
             const colorInfo = COLOR_OPTIONS.find((c) => c.value === entry.color) || COLOR_OPTIONS[0];
@@ -200,36 +209,52 @@ export default function DdayWidget() {
             return (
               <div
                 key={entry.id}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${colorInfo.light}`}
+                className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 transition-colors ${colorInfo.light}`}
               >
-                <span className="text-lg">{entry.emoji}</span>
+                <span className="flex-shrink-0 text-base">{entry.emoji}</span>
                 <div className="min-w-0 flex-1">
                   <p className={`truncate text-xs font-semibold ${colorInfo.text}`}>
                     {entry.title}
                   </p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                    {entry.date.replace(/-/g, ".")}
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                      {entry.date.replace(/-/g, ".")}
+                    </span>
+                    <span className="text-[10px] text-gray-300 dark:text-gray-600">·</span>
+                    <select
+                      value={entry.estimated_minutes}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        updateEntry(entry.id, { estimated_minutes: Number(e.target.value) }).catch(() => {});
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="appearance-none bg-transparent text-[10px] text-gray-400 outline-none hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-pointer"
+                    >
+                      {SESSION_DURATION_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-                    isToday
-                      ? `${colorInfo.bg} text-white`
-                      : isPast
-                        ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
-                        : `${colorInfo.text} font-bold`
-                  }`}>
-                    {formatDday(days)}
-                  </span>
-                  <button
-                    onClick={() => removeEntry(entry.id)}
-                    className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 dark:text-gray-600"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+                <span className={`flex-shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-bold ${
+                  isToday
+                    ? `${colorInfo.bg} text-white`
+                    : isPast
+                      ? "bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+                      : `${colorInfo.text} font-bold`
+                }`}>
+                  {formatDday(days)}
+                </span>
+                <button
+                  onClick={() => removeEntry(entry.id)}
+                  className="flex-shrink-0 rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 dark:text-gray-600"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             );
           })}
@@ -294,7 +319,7 @@ export default function DdayWidget() {
             ))}
           </div>
 
-          <div className="mb-3 flex gap-1.5">
+          <div className="mb-2 flex gap-1.5">
             {COLOR_OPTIONS.map((c) => (
               <button
                 key={c.value}
@@ -305,6 +330,24 @@ export default function DdayWidget() {
                 title={c.label}
               />
             ))}
+          </div>
+
+          {/* 소요 시간 — 간결한 select */}
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+              ⏱ 소요 시간
+            </span>
+            <select
+              value={newMinutes}
+              onChange={(e) => setNewMinutes(Number(e.target.value))}
+              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-700 outline-none focus:border-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+            >
+              {SESSION_DURATION_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex justify-end gap-2">

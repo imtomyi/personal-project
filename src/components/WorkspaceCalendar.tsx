@@ -8,7 +8,8 @@ import { parseLocalDate, todayKST, toDateStr, nowKST, fmtMD, getDurationInDays, 
 import { WEEKDAY_LABELS, DDAY_COLOR_MAP } from "@/lib/constants";
 import type { WorkspaceTodo } from "@/hooks/useAllWorkspaceTodos";
 import { getWorkspaceColorByKey } from "@/hooks/useAllWorkspaceTodos";
-import type { DdayEntry } from "@/lib/types";
+import type { DdayEntry, RecurringTask, RecurrenceType } from "@/lib/types";
+import { RECURRENCE_OPTIONS } from "@/lib/constants";
 
 type CanvasCourseInfo = { id: string; name: string };
 
@@ -20,6 +21,9 @@ type WorkspaceCalendarProps = {
   canvasCourses?: CanvasCourseInfo[];
   ddayEntries?: DdayEntry[];
   onUpdateTodo?: (id: string, updates: Partial<{ due_date: string | null; duration_days: number }>) => Promise<void>;
+  recurringTasks?: RecurringTask[];
+  onDeleteRecurringTask?: (id: string) => void;
+  onOpenRoutineManager?: () => void;
 };
 
 type SpanEntry = {
@@ -34,6 +38,12 @@ type SpanEntry = {
 
 type DdaySpanEntry = {
   dday: DdayEntry;
+  col: number;
+  row: number;
+};
+
+type RecurringSpanEntry = {
+  task: RecurringTask;
   col: number;
   row: number;
 };
@@ -53,8 +63,8 @@ type PopoverInfo = {
 };
 
 
-export default function WorkspaceCalendar({ todos, workspaces, loading, canvasConnected, canvasCourses = [], ddayEntries = [], onUpdateTodo }: WorkspaceCalendarProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+export default function WorkspaceCalendar({ todos, workspaces, loading, canvasConnected, canvasCourses = [], ddayEntries = [], onUpdateTodo, recurringTasks = [], onDeleteRecurringTask, onOpenRoutineManager }: WorkspaceCalendarProps) {
+  const [currentDate, setCurrentDate] = useState(() => nowKST());
   const [hoveredTodo, setHoveredTodo] = useState<string | null>(null);
   const [popover, setPopover] = useState<PopoverInfo | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -180,9 +190,10 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
     return weeks.map((week) => {
       const spans: SpanEntry[] = [];
       const ddaySpans: DdaySpanEntry[] = [];
+      const recurringSpans: RecurringSpanEntry[] = [];
       const weekStart = week.find((d) => d !== null);
       const weekEnd = [...week].reverse().find((d) => d !== null);
-      if (!weekStart || !weekEnd) return { spans, ddaySpans, totalRows: 0 };
+      if (!weekStart || !weekEnd) return { spans, ddaySpans, recurringSpans, totalRows: 0 };
 
       const weekStartDate = parseLocalDate(weekStart);
       const weekEndDate = parseLocalDate(weekEnd);
@@ -218,10 +229,11 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
       // Sort & assign rows for todo spans
       spans.sort((a, b) => a.startCol - b.startCol || b.spanCols - a.spanCols);
       const rowOccupied: number[][] = [];
+      const MAX_ROWS = 30;
 
       for (const span of spans) {
         let assignedRow = 0;
-        while (true) {
+        while (assignedRow < MAX_ROWS) {
           if (!rowOccupied[assignedRow]) rowOccupied[assignedRow] = [];
           const conflict = rowOccupied[assignedRow].some((occupied) => {
             const occStart = occupied >> 16;
@@ -243,7 +255,7 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
 
         // Find a row that doesn't conflict at this column
         let assignedRow = 0;
-        while (true) {
+        while (assignedRow < MAX_ROWS) {
           if (!rowOccupied[assignedRow]) rowOccupied[assignedRow] = [];
           const conflict = rowOccupied[assignedRow].some((occupied) => {
             const occStart = occupied >> 16;
@@ -258,15 +270,58 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
         rowOccupied[assignedRow].push((col << 16) | col);
       }
 
+      // 3) Recurring tasks: show on matching days of week
+      const activeRecurring = recurringTasks.filter((t) => t.is_active);
+      for (const task of activeRecurring) {
+        for (let colIdx = 0; colIdx < 7; colIdx++) {
+          const dateStr = week[colIdx];
+          if (!dateStr) continue;
+          const d = parseLocalDate(dateStr);
+          const dayOfWeek = d.getDay();
+
+          let shouldShow = false;
+          switch (task.recurrence) {
+            case "daily":
+              shouldShow = true;
+              break;
+            case "weekdays":
+              shouldShow = dayOfWeek >= 1 && dayOfWeek <= 5;
+              break;
+            case "weekly":
+            case "custom":
+              shouldShow = task.days_of_week.includes(dayOfWeek);
+              break;
+          }
+          if (!shouldShow) continue;
+
+          // Find a row that doesn't conflict at this column
+          let assignedRow = 0;
+          while (assignedRow < MAX_ROWS) {
+            if (!rowOccupied[assignedRow]) rowOccupied[assignedRow] = [];
+            const conflict = rowOccupied[assignedRow].some((occupied) => {
+              const occStart = occupied >> 16;
+              const occEnd = occupied & 0xffff;
+              return colIdx >= occStart && colIdx <= occEnd;
+            });
+            if (!conflict) break;
+            assignedRow++;
+          }
+          recurringSpans.push({ task, col: colIdx, row: assignedRow });
+          if (!rowOccupied[assignedRow]) rowOccupied[assignedRow] = [];
+          rowOccupied[assignedRow].push((colIdx << 16) | colIdx);
+        }
+      }
+
       const maxRow = Math.max(
         spans.length > 0 ? Math.max(...spans.map((s) => s.row)) : -1,
         ddaySpans.length > 0 ? Math.max(...ddaySpans.map((s) => s.row)) : -1,
+        recurringSpans.length > 0 ? Math.max(...recurringSpans.map((s) => s.row)) : -1,
       );
       const totalRows = maxRow >= 0 ? maxRow + 1 : 0;
 
-      return { spans, ddaySpans, totalRows };
+      return { spans, ddaySpans, recurringSpans, totalRows };
     });
-  }, [weeks, realTodos, wsColorMap, ddayEntries]);
+  }, [weeks, realTodos, wsColorMap, ddayEntries, recurringTasks]);
 
   // Quick stats
   const stats = useMemo(() => {
@@ -298,7 +353,7 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
     setCurrentDate(new Date(year, month + 1, 1));
   }
   function goToday() {
-    setCurrentDate(new Date());
+    setCurrentDate(nowKST());
   }
 
   const todayStr = todayKST();
@@ -415,12 +470,22 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
               </button>
             </div>
           </div>
-          <button
-            onClick={goToday}
-            className="rounded-full bg-black/[0.05] px-3.5 py-1 text-[13px] font-medium text-foreground hover:bg-black/[0.08] dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]"
-          >
-            오늘
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenRoutineManager && (
+              <button
+                onClick={onOpenRoutineManager}
+                className="rounded-full bg-blue-50 px-3 py-1 text-[12px] font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/40"
+              >
+                🔁 루틴 관리
+              </button>
+            )}
+            <button
+              onClick={goToday}
+              className="rounded-full bg-black/[0.05] px-3.5 py-1 text-[13px] font-medium text-foreground hover:bg-black/[0.08] dark:bg-white/[0.08] dark:text-white dark:hover:bg-white/[0.12]"
+            >
+              오늘
+            </button>
+          </div>
         </div>
 
         {/* Day headers */}
@@ -443,26 +508,33 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
 
         {/* Calendar grid */}
         {weeks.map((week, weekIdx) => {
-          const { spans, ddaySpans } = weekSpanData[weekIdx];
+          const { spans, ddaySpans, recurringSpans } = weekSpanData[weekIdx];
           const MAX_VISIBLE_ROWS = 5;
           const visibleSpans = spans.filter((s) => s.row < MAX_VISIBLE_ROWS);
           const visibleDdaySpans = ddaySpans.filter((s) => s.row < MAX_VISIBLE_ROWS);
+          const visibleRecurringSpans = recurringSpans.filter((s) => s.row < MAX_VISIBLE_ROWS);
           const spanAreaHeight = MAX_VISIBLE_ROWS * 12 + 2;
 
           // Count hidden items per column
-          const hiddenByCol: Record<number, { todos: SpanEntry[]; ddays: DdaySpanEntry[] }> = {};
+          const hiddenByCol: Record<number, { todos: SpanEntry[]; ddays: DdaySpanEntry[]; recurring: RecurringSpanEntry[] }> = {};
           for (const span of spans) {
             if (span.row >= MAX_VISIBLE_ROWS) {
               for (let c = span.startCol; c < span.startCol + span.spanCols; c++) {
-                if (!hiddenByCol[c]) hiddenByCol[c] = { todos: [], ddays: [] };
+                if (!hiddenByCol[c]) hiddenByCol[c] = { todos: [], ddays: [], recurring: [] };
                 hiddenByCol[c].todos.push(span);
               }
             }
           }
           for (const ds of ddaySpans) {
             if (ds.row >= MAX_VISIBLE_ROWS) {
-              if (!hiddenByCol[ds.col]) hiddenByCol[ds.col] = { todos: [], ddays: [] };
+              if (!hiddenByCol[ds.col]) hiddenByCol[ds.col] = { todos: [], ddays: [], recurring: [] };
               hiddenByCol[ds.col].ddays.push(ds);
+            }
+          }
+          for (const rs of recurringSpans) {
+            if (rs.row >= MAX_VISIBLE_ROWS) {
+              if (!hiddenByCol[rs.col]) hiddenByCol[rs.col] = { todos: [], ddays: [], recurring: [] };
+              hiddenByCol[rs.col].recurring.push(rs);
             }
           }
 
@@ -485,7 +557,7 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
                   const isToday = dateStr === todayStr;
                   const colDay = colIdx;
                   const hidden = hiddenByCol[colIdx];
-                  const hiddenCount = hidden ? hidden.todos.length + hidden.ddays.length : 0;
+                  const hiddenCount = hidden ? hidden.todos.length + hidden.ddays.length + hidden.recurring.length : 0;
 
                   const isDragTarget = dragOver === dateStr;
 
@@ -549,6 +621,14 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
                                   </div>
                                 );
                               })}
+                              {hidden!.recurring.map((rs) => (
+                                <div
+                                  key={`r-${rs.task.id}-${rs.col}`}
+                                  className="truncate rounded bg-blue-50 px-1.5 py-1 text-[10px] font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                                >
+                                  🔁 {rs.task.title}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -558,8 +638,8 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
                 })}
               </div>
 
-              {/* Unified span bar overlay (todos + D-day in same row system) */}
-              {(visibleSpans.length > 0 || visibleDdaySpans.length > 0) && (
+              {/* Unified span bar overlay (todos + D-day + recurring in same row system) */}
+              {(visibleSpans.length > 0 || visibleDdaySpans.length > 0 || visibleRecurringSpans.length > 0) && (
                 <div
                   className="pointer-events-none absolute left-0 right-0"
                   style={{ top: "34px", height: `${spanAreaHeight}px` }}
@@ -641,6 +721,39 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
                       </div>
                     );
                   })}
+
+                  {/* Recurring task spans */}
+                  {visibleRecurringSpans.map((rs) => (
+                    <div
+                      key={`recurring-${rs.task.id}-${weekIdx}-${rs.col}`}
+                      className="pointer-events-auto absolute group/recurring flex items-center gap-0.5 truncate rounded-lg px-1 text-[7px] font-semibold leading-none z-10 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                      style={{
+                        top: `${rs.row * 12}px`,
+                        left: `calc(${(rs.col / 7) * 100}% + 2px)`,
+                        width: `calc(${(1 / 7) * 100}% - 4px)`,
+                        height: "10px",
+                      }}
+                      title={`🔁 ${rs.task.title}${rs.task.time_start ? ` (${rs.task.time_start})` : ""}`}
+                    >
+                      <span className="flex-shrink-0 text-[7px]">🔁</span>
+                      <span className="truncate">{rs.task.title}</span>
+                      {onDeleteRecurringTask && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`"${rs.task.title}" 반복일정을 삭제하시겠습니까?`)) {
+                              onDeleteRecurringTask(rs.task.id);
+                            }
+                          }}
+                          className="ml-auto flex-shrink-0 rounded text-blue-400 opacity-0 hover:text-red-500 group-hover/recurring:opacity-100"
+                        >
+                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -13,11 +13,16 @@ export function parseLocalDate(dateStr: string): Date {
   return new Date(y, m - 1, d);
 }
 
-/** 현재 KST 기준 Date 반환 */
+/**
+ * 현재 KST 기준 Date 반환
+ * UTC+9 산술 방식 사용 (toLocaleString 파싱보다 안정적)
+ * 한국은 DST가 없으므로 항상 UTC+9 고정
+ */
 export function nowKST(): Date {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: KST_TIMEZONE })
-  );
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const kstMs = utcMs + 9 * 3600000;
+  return new Date(kstMs);
 }
 
 /** 오늘 KST 날짜 "YYYY-MM-DD" */

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { useRealtimeSubscription } from "./useRealtimeSubscription";
-import { todayKST } from "@/lib/date";
+import { todayKST, parseLocalDate } from "@/lib/date";
 import type { RecurringTask } from "@/lib/types";
 
 export function useRecurringTasks(workspaceId?: string) {
@@ -13,6 +13,11 @@ export function useRecurringTasks(workspaceId?: string) {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
   const generatedRef = useRef(false);
+
+  // workspaceId 변경 시 generatedRef 리셋 → 새 워크스페이스에서도 할 일 생성 가능
+  useEffect(() => {
+    generatedRef.current = false;
+  }, [workspaceId]);
 
   const fetchTasks = useCallback(async () => {
     if (!user) return;
@@ -26,7 +31,12 @@ export function useRecurringTasks(workspaceId?: string) {
       query = query.eq("workspace_id", workspaceId);
     }
 
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) {
+      console.error("Failed to fetch recurring tasks:", error);
+      setLoading(false);
+      return; // 기존 state 유지, 빈 배열로 덮어쓰지 않음
+    }
     setTasks(data ?? []);
     setLoading(false);
   }, [user, workspaceId, supabase]);
@@ -42,66 +52,82 @@ export function useRecurringTasks(workspaceId?: string) {
   // Auto-generate today's todos from recurring tasks
   useEffect(() => {
     if (!user || loading || generatedRef.current) return;
-    generatedRef.current = true;
 
     const generateTodos = async () => {
-      const today = todayKST();
-      const dayOfWeek = new Date().getDay(); // 0=Sun..6=Sat
+      try {
+        const today = todayKST();
+        const dayOfWeek = parseLocalDate(today).getDay(); // 0=Sun..6=Sat (KST)
 
-      const activeTasks = tasks.filter((t) => t.is_active);
-      if (activeTasks.length === 0) return;
-
-      // Check which recurring tasks should fire today
-      const todayTasks = activeTasks.filter((t) => {
-        switch (t.recurrence) {
-          case "daily":
-            return true;
-          case "weekdays":
-            return dayOfWeek >= 1 && dayOfWeek <= 5;
-          case "weekly":
-            return t.days_of_week.includes(dayOfWeek);
-          case "custom":
-            return t.days_of_week.includes(dayOfWeek);
-          default:
-            return false;
+        const activeTasks = tasks.filter((t) => t.is_active);
+        if (activeTasks.length === 0) {
+          generatedRef.current = true;
+          return;
         }
-      });
 
-      if (todayTasks.length === 0) return;
+        // Check which recurring tasks should fire today
+        const todayTasks = activeTasks.filter((t) => {
+          switch (t.recurrence) {
+            case "daily":
+              return true;
+            case "weekdays":
+              return dayOfWeek >= 1 && dayOfWeek <= 5;
+            case "weekly":
+              return t.days_of_week.includes(dayOfWeek);
+            case "custom":
+              return t.days_of_week.includes(dayOfWeek);
+            default:
+              return false;
+          }
+        });
 
-      // Check which ones already have todos generated today
-      const recurringIds = todayTasks.map((t) => t.id);
-      const { data: existingTodos } = await supabase
-        .from("todos")
-        .select("recurring_task_id")
-        .in("recurring_task_id", recurringIds)
-        .eq("due_date", today);
+        if (todayTasks.length === 0) {
+          generatedRef.current = true;
+          return;
+        }
 
-      const existingSet = new Set(
-        (existingTodos ?? []).map((t: { recurring_task_id: string }) => t.recurring_task_id)
-      );
+        // Check which ones already have todos generated today
+        const recurringIds = todayTasks.map((t) => t.id);
+        const { data: existingTodos } = await supabase
+          .from("todos")
+          .select("recurring_task_id")
+          .in("recurring_task_id", recurringIds)
+          .eq("due_date", today);
 
-      const toCreate = todayTasks.filter((t) => !existingSet.has(t.id));
-      if (toCreate.length === 0) return;
+        const existingSet = new Set(
+          (existingTodos ?? []).map((t: { recurring_task_id: string }) => t.recurring_task_id)
+        );
 
-      // Create todos for each
-      const todosToInsert = toCreate.map((t) => ({
-        workspace_id: t.workspace_id,
-        title: t.title,
-        description: t.description,
-        priority: t.priority,
-        created_by: user.id,
-        due_date: today,
-        duration_days: 24,
-        sort_order: 0,
-        recurring_task_id: t.id,
-        status: "todo",
-      }));
+        const toCreate = todayTasks.filter((t) => !existingSet.has(t.id));
+        if (toCreate.length === 0) {
+          generatedRef.current = true;
+          return;
+        }
 
-      // Only insert if workspace_id is not null
-      const validInserts = todosToInsert.filter((t) => t.workspace_id);
-      if (validInserts.length > 0) {
-        await supabase.from("todos").insert(validInserts);
+        // Create todos for each
+        const todosToInsert = toCreate.map((t) => ({
+          workspace_id: t.workspace_id,
+          title: t.title,
+          description: t.description,
+          priority: t.priority,
+          created_by: user.id,
+          due_date: today,
+          duration_days: 24,
+          sort_order: 0,
+          recurring_task_id: t.id,
+          status: "todo",
+        }));
+
+        // Only insert if workspace_id is not null
+        const validInserts = todosToInsert.filter((t) => t.workspace_id);
+        if (validInserts.length > 0) {
+          await supabase.from("todos").insert(validInserts);
+        }
+
+        // 성공 시에만 generatedRef 설정 → 실패 시 재시도 가능
+        generatedRef.current = true;
+      } catch (err) {
+        console.error("Failed to generate recurring todos:", err);
+        // generatedRef를 설정하지 않아 다음 렌더에서 재시도
       }
     };
 
@@ -140,6 +166,8 @@ export function useRecurringTasks(workspaceId?: string) {
 
   async function deleteRecurringTask(id: string) {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    // FK 제약: todos 테이블에서 이 반복일정을 참조하는 행의 recurring_task_id를 null로 변경
+    await supabase.from("todos").update({ recurring_task_id: null }).eq("recurring_task_id", id);
     const { error } = await supabase.from("recurring_tasks").delete().eq("id", id);
     if (error) {
       await fetchTasks();

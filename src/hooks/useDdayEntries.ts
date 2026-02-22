@@ -76,6 +76,7 @@ export function useDdayEntries() {
     date: string,
     emoji: string = "📌",
     color: string = "blue",
+    estimated_minutes: number = 30,
   ) {
     if (!user) return;
     const nextOrder =
@@ -89,6 +90,7 @@ export function useDdayEntries() {
       emoji,
       color,
       sort_order: nextOrder,
+      estimated_minutes,
       created_at: new Date().toISOString(),
     };
     setEntries((prev) => [...prev, optimistic]);
@@ -100,12 +102,26 @@ export function useDdayEntries() {
       emoji,
       color,
       sort_order: nextOrder,
+      estimated_minutes,
     });
     if (error) {
       setEntries((prev) => prev.filter((e) => e.id !== optimistic.id));
       throw error;
     }
     await fetchEntries();
+  }
+
+  async function updateEntry(
+    id: string,
+    updates: Partial<Pick<DdayEntry, "estimated_minutes" | "title" | "date" | "emoji" | "color">>,
+  ) {
+    if (!user) return;
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+    const { error } = await supabase.from("dday_entries").update(updates).eq("id", id);
+    if (error) {
+      await fetchEntries();
+      throw error;
+    }
   }
 
   async function removeEntry(id: string) {
@@ -117,5 +133,5 @@ export function useDdayEntries() {
     }
   }
 
-  return { entries, loading, addEntry, removeEntry };
+  return { entries, loading, addEntry, updateEntry, removeEntry };
 }

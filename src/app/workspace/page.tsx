@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -47,7 +47,7 @@ export default function WorkspacesPage() {
   const router = useRouter();
   const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo, archiveWorkspace } = useAllWorkspaceTodos();
   const { canvasTodos, canvasCourses, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
-  const { entries: ddayEntries } = useDdayEntries();
+  const { entries: ddayEntries, updateEntry: updateDdayEntry } = useDdayEntries();
   const { showToast } = useToast();
   const [showRoutineManager, setShowRoutineManager] = useState(false);
   const [showOverdueAlert, setShowOverdueAlert] = useState(false);
@@ -63,10 +63,16 @@ export default function WorkspacesPage() {
     refreshSchedule,
   } = useDailyPlan();
   const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
-  const { tasks: allRecurringTasks } = useRecurringTasks();
+  const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
   const { habitsWithTime } = useHabits();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
+
+  // ── 오늘 디데이 항목 필터 (시간표 연동) ──
+  const todayDdayEntries = useMemo(
+    () => ddayEntries.filter((e) => e.date === todayStr),
+    [ddayEntries, todayStr],
+  );
 
   // ── 활성/아카이브 워크스페이스 분리 ──
   const activeWorkspaces = useMemo(() => workspaces.filter((w) => !w.is_archived), [workspaces]);
@@ -91,11 +97,15 @@ export default function WorkspacesPage() {
   }, [carriedOverCount]);
 
   // ── 전체 워크스페이스 자동 배치 (하루 1회) ──
+  const autoDistRef = useRef(false);
   useEffect(() => {
-    if (todosLoading || carryOverProcessing) return;
+    if (todosLoading || carryOverProcessing || autoDistRef.current) return;
     const key = "auto_dist_global";
     try {
-      if (localStorage.getItem(key) === todayStr) return;
+      if (localStorage.getItem(key) === todayStr) {
+        autoDistRef.current = true;
+        return;
+      }
     } catch {
       return;
     }
@@ -112,9 +122,11 @@ export default function WorkspacesPage() {
     );
     if (unplanned.length === 0) {
       try { localStorage.setItem(key, todayStr); } catch { /* ignore */ }
+      autoDistRef.current = true;
       return;
     }
 
+    autoDistRef.current = true; // 실행 전에 설정하여 이중 호출 방지
     const sorted = sortTodosBySchedulePriority(unplanned, todayStr);
     const items = sorted.map((t) => ({
       todoId: t.id,
@@ -142,6 +154,20 @@ export default function WorkspacesPage() {
   const handleScheduleUpdateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "is_completed" | "status">>) => {
     await updateAllTodo(id, updates);
   }, [updateAllTodo]);
+
+  const deletingIdsRef = useRef(new Set<string>());
+  const handleDeleteRecurringTask = useCallback(async (id: string) => {
+    if (deletingIdsRef.current.has(id)) return; // 이중 삭제 방지
+    deletingIdsRef.current.add(id);
+    try {
+      await deleteRecurringTask(id);
+      showToast("반복일정이 삭제되었습니다", "success");
+    } catch {
+      showToast("삭제 실패", "error");
+    } finally {
+      deletingIdsRef.current.delete(id);
+    }
+  }, [deleteRecurringTask, showToast]);
 
   // ── 지연된 할 일 (전체 워크스페이스 통합) ──
   const overdueTodos = useMemo(() => {
@@ -649,6 +675,9 @@ export default function WorkspacesPage() {
               canvasCourses={canvasCourses}
               ddayEntries={ddayEntries}
               onUpdateTodo={updateAllTodo}
+              recurringTasks={allRecurringTasks}
+              onDeleteRecurringTask={handleDeleteRecurringTask}
+              onOpenRoutineManager={() => setShowRoutineManager(true)}
             />
           </div>
 
@@ -791,6 +820,9 @@ export default function WorkspacesPage() {
               onAutoDistributeTodayTasks={handleAutoDistributeTodayTasks}
               onRefreshSchedule={refreshSchedule}
               workspaceMap={workspaceMap}
+              ddayEntries={todayDdayEntries}
+              onDeleteRecurringTask={handleDeleteRecurringTask}
+              onOpenRoutineManager={() => setShowRoutineManager(true)}
             />
           </div>
 

@@ -2,19 +2,18 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useHabits } from "@/hooks/useHabits";
-import { todayKST } from "@/lib/date";
+import { todayKST, nowKST, parseLocalDate, toDateStr } from "@/lib/date";
 
 const EMOJI_OPTIONS = ["✅", "💪", "📚", "🏃", "💧", "🧘", "🎯", "💤", "🍎", "📝"];
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 function getLast7Days(): string[] {
   const days: string[] = [];
-  const d = new Date();
-  d.setMinutes(d.getMinutes() + d.getTimezoneOffset() + 540);
+  const d = nowKST();
   for (let i = 6; i >= 0; i--) {
     const dd = new Date(d);
     dd.setDate(dd.getDate() - i);
-    days.push(dd.toISOString().slice(0, 10));
+    days.push(toDateStr(dd));
   }
   return days;
 }
@@ -22,7 +21,7 @@ function getLast7Days(): string[] {
 function getDayLabel(dateStr: string): string {
   const today = todayKST();
   if (dateStr === today) return "오늘";
-  const d = new Date(dateStr + "T00:00:00");
+  const d = parseLocalDate(dateStr);
   return DAY_LABELS[d.getDay()];
 }
 

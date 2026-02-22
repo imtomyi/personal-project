@@ -1,12 +1,12 @@
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan, DdayEntry } from "@/lib/types";
 import { ASSIGNMENT_EFFORT_HOURS } from "@/lib/constants";
-import { toDateStr } from "@/lib/date";
+import { toDateStr, parseLocalDate } from "@/lib/date";
 
 // ============================================
 // Types
 // ============================================
 
-export type ScheduleBlockType = "recurring" | "todo" | "empty" | "class" | "study" | "habit";
+export type ScheduleBlockType = "recurring" | "todo" | "empty" | "class" | "study" | "habit" | "dday";
 
 export type ScheduleBlock = {
   id: string;
@@ -20,6 +20,7 @@ export type ScheduleBlock = {
   recurringTaskId?: string;
   assignmentId?: string; // study blocks → assignment 연결
   courseName?: string; // class/study 블록 표시용
+  ddayEntryId?: string; // 디데이 항목 연결
 };
 
 type ScheduleOptions = {
@@ -204,7 +205,7 @@ export function computeStudyPlans(
   assignments: Assignment[],
   todayStr: string,
 ): StudyPlan[] {
-  const todayMs = new Date(todayStr + "T00:00:00").getTime();
+  const todayMs = parseLocalDate(todayStr).getTime();
 
   return assignments
     .filter((a) => !a.is_completed && a.due_date)
@@ -399,6 +400,42 @@ export function generateSchedule(
 }
 
 // ============================================
+// 4b. D-Day 블록 배치 (모든 블록 확정 후 빈 슬롯에 배치)
+// ============================================
+
+export function placeDdayBlocks(
+  existingBlocks: ScheduleBlock[],
+  ddayEntries: DdayEntry[],
+): ScheduleBlock[] {
+  if (!ddayEntries || ddayEntries.length === 0) return existingBlocks;
+
+  const allBlocks = [...existingBlocks];
+
+  for (const entry of ddayEntries) {
+    allBlocks.sort((a, b) => a.startMin - b.startMin);
+    const rankedSlots = findFreeSlotsRanked(allBlocks);
+
+    for (const slot of rankedSlots) {
+      if (slot.end - slot.start >= entry.estimated_minutes) {
+        allBlocks.push({
+          id: `dday-${entry.id}`,
+          title: `${entry.emoji} ${entry.title}`,
+          startMin: slot.start,
+          endMin: slot.start + entry.estimated_minutes,
+          type: "dday",
+          color: entry.color,
+          ddayEntryId: entry.id,
+        });
+        break;
+      }
+    }
+  }
+
+  allBlocks.sort((a, b) => a.startMin - b.startMin);
+  return allBlocks;
+}
+
+// ============================================
 // 5. 자동 배분 (공부 + 일반 할일) — @deprecated: autoAssignDailyPlans 사용 권장
 // ============================================
 
@@ -563,8 +600,8 @@ function getUrgencyScore(todo: Todo, todayStr: string): number {
   if (todo.due_date < todayStr) return 100; // 지연 (최우선)
   if (todo.due_date === todayStr) return 200; // 오늘 마감
   // 3일 이내 임박
-  const todayMs = new Date(todayStr + "T00:00:00").getTime();
-  const dueMs = new Date(todo.due_date + "T00:00:00").getTime();
+  const todayMs = parseLocalDate(todayStr).getTime();
+  const dueMs = parseLocalDate(todo.due_date).getTime();
   const daysDiff = Math.ceil((dueMs - todayMs) / (1000 * 60 * 60 * 24));
   if (daysDiff <= 3) return 300;
   return 400;

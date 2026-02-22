@@ -13,7 +13,7 @@ import {
   minutesToTime,
   type ScheduleBlock,
 } from "@/lib/autoScheduler";
-import { todayKST } from "@/lib/date";
+import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
 
 const START_HOUR = 6;
 const END_HOUR = 24;
@@ -78,7 +78,7 @@ export default function DailyScheduleWidget() {
   const { activePlans, loading: plansLoading } = useDailyPlan();
 
   const today = todayKST();
-  const dayOfWeek = new Date().getDay();
+  const dayOfWeek = parseLocalDate(today).getDay();
 
   // Course name mapping
   const courseNames = useMemo(() => {
@@ -89,8 +89,8 @@ export default function DailyScheduleWidget() {
     return map;
   }, [canvasCourses]);
 
-  // Current time
-  const now = new Date();
+  // Current time (KST)
+  const now = nowKST();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   const currentTopPx = ((currentMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
 

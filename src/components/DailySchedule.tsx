@@ -1,17 +1,18 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, DailyPlan } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, DailyPlan, DdayEntry } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import {
   generateSchedule,
   autoAssignTodos,
   autoAssignDailyPlans,
+  placeDdayBlocks,
   minutesToTime,
   type ScheduleBlock,
   type ScheduleBlockType,
 } from "@/lib/autoScheduler";
-import { todayKST } from "@/lib/date";
+import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -32,6 +33,9 @@ type DailyScheduleProps = {
   onAutoDistributeTodayTasks?: (todos: Todo[]) => Promise<void>;
   onRefreshSchedule?: () => Promise<void>;
   workspaceMap?: Map<string, { name: string; color: string }>;
+  ddayEntries?: DdayEntry[];
+  onDeleteRecurringTask?: (id: string) => void;
+  onOpenRoutineManager?: () => void;
 };
 
 // ============================================
@@ -81,6 +85,13 @@ const BLOCK_COLORS: Record<ScheduleBlockType, BlockColorConfig> = {
     text: "text-emerald-700 dark:text-emerald-300",
     icon: "",
     label: "할 일",
+  },
+  dday: {
+    border: "border-sky-200 dark:border-sky-800",
+    bg: "bg-sky-50 dark:bg-sky-900/20",
+    text: "text-sky-700 dark:text-sky-300",
+    icon: "📌",
+    label: "디데이",
   },
   empty: {
     border: "border-gray-200 dark:border-gray-700",
@@ -174,6 +185,9 @@ export default function DailySchedule({
   onAutoDistributeTodayTasks,
   onRefreshSchedule,
   workspaceMap,
+  ddayEntries,
+  onDeleteRecurringTask,
+  onOpenRoutineManager,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const HOUR_HEIGHT = compact ? 30 : 48;
@@ -184,7 +198,7 @@ export default function DailySchedule({
   const hasPersisted = useRef(false);
 
   const today = todayKST();
-  const dayOfWeek = new Date().getDay();
+  const dayOfWeek = parseLocalDate(today).getDay();
 
   // 오늘 기한이지만 아직 daily plan에 없는 할일
   const todayDueTodos = useMemo(() => {
@@ -201,8 +215,8 @@ export default function DailySchedule({
     );
   }, [todos, dailyPlans, today]);
 
-  // Current time position
-  const now = new Date();
+  // Current time position (KST)
+  const now = nowKST();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
   // 일일 계획 활성 여부
@@ -262,16 +276,22 @@ export default function DailySchedule({
   }, [dailyPlans]);
 
   const blocks = useMemo(() => {
+    let result: ScheduleBlock[];
     // 일일 계획이 있으면 그것 사용
     if (dailyPlanResult) {
-      return dailyPlanResult.blocks;
+      result = dailyPlanResult.blocks;
+    } else if (showAutoSchedule) {
+      // 기존 자동 배분
+      result = autoAssignTodos(baseBlocks, todos, assignments, today);
+    } else {
+      result = baseBlocks;
     }
-    // 기존 자동 배분
-    if (showAutoSchedule) {
-      return autoAssignTodos(baseBlocks, todos, assignments, today);
+    // D-Day 블록은 모든 블록 확정 후 남은 빈 슬롯에 배치
+    if (ddayEntries && ddayEntries.length > 0) {
+      result = placeDdayBlocks(result, ddayEntries);
     }
-    return baseBlocks;
-  }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today]);
+    return result;
+  }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today, ddayEntries]);
 
   // 가시 범위 계산 (블록이 있는 시간대 + 현재 시각 기준)
   const visibleRange = useMemo(
@@ -397,6 +417,8 @@ export default function DailySchedule({
       });
     if (activeTypes.types.has("todo"))
       items.push({ color: BLOCK_COLORS.todo, key: "todo" });
+    if (activeTypes.types.has("dday"))
+      items.push({ color: BLOCK_COLORS.dday, key: "dday" });
     return items;
   }, [activeTypes]);
 
@@ -453,6 +475,14 @@ export default function DailySchedule({
                   ) : (
                     "🔄 시간표 새로고침"
                   )}
+                </button>
+              )}
+              {onOpenRoutineManager && (
+                <button
+                  onClick={onOpenRoutineManager}
+                  className="rounded-xl bg-black/[0.05] px-3 py-1.5 text-[12px] font-medium text-secondary transition-colors hover:bg-black/[0.08] dark:bg-white/[0.08] dark:hover:bg-white/[0.12]"
+                >
+                  🔁 루틴 관리
                 </button>
               )}
               {!hasActivePlans && (
@@ -589,7 +619,7 @@ export default function DailySchedule({
               return (
                 <div
                   key={block.id}
-                  className={`absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 ${
+                  className={`group absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 ${
                     compact ? "left-9 right-1" : "left-14 right-2"
                   } ${colorCfg.border} ${colorCfg.bg} ${
                     isDragging ? "z-30 shadow-lg opacity-90 ring-2 ring-[#007AFF]/30" : ""
@@ -655,6 +685,22 @@ export default function DailySchedule({
                           strokeWidth={2}
                           d="M5 13l4 4L19 7"
                         />
+                      </svg>
+                    </button>
+                  )}
+                  {/* 반복일정 삭제 버튼 */}
+                  {!compact && block.type === "recurring" && block.recurringTaskId && onDeleteRecurringTask && !isDragging && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm("이 반복일정을 삭제하시겠습니까?")) {
+                          onDeleteRecurringTask(block.recurringTaskId!);
+                        }
+                      }}
+                      className="mt-0.5 flex-shrink-0 rounded p-0.5 text-secondary opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   )}

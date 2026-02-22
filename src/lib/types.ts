@@ -263,6 +263,7 @@ export type DdayEntry = {
   emoji: string;
   color: string;
   sort_order: number;
+  estimated_minutes: number; // 시간표 배치용 소요 시간 (기본 30분)
   created_at: string;
 };
 

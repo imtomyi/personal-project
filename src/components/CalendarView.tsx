@@ -30,7 +30,7 @@ type PopupState = {
 } | null;
 
 export default function CalendarView({ todos, onTodoClick, onUpdateTodo, onDeleteTodo, onAddTodo }: CalendarViewProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => nowKST());
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [popup, setPopup] = useState<PopupState>(null);
   const [quickAdd, setQuickAdd] = useState<{ date: string } | null>(null);
@@ -118,9 +118,10 @@ export default function CalendarView({ todos, onTodoClick, onUpdateTodo, onDelet
       spans.sort((a, b) => a.startCol - b.startCol || b.spanCols - a.spanCols);
       const rowOccupied: number[][] = [];
 
+      const MAX_ROWS = 30;
       for (const span of spans) {
         let assignedRow = 0;
-        while (true) {
+        while (assignedRow < MAX_ROWS) {
           if (!rowOccupied[assignedRow]) rowOccupied[assignedRow] = [];
           const conflict = rowOccupied[assignedRow].some((occupied) => {
             const occStart = occupied >> 16;
@@ -167,7 +168,7 @@ export default function CalendarView({ todos, onTodoClick, onUpdateTodo, onDelet
   }
 
   function goToday() {
-    setCurrentDate(new Date());
+    setCurrentDate(nowKST());
   }
 
   function handleDragStart(e: React.DragEvent, todo: Todo, mode: "move" | "resize" = "move") {
