@@ -21,6 +21,8 @@ export type Workspace = {
   created_by: string | null;
   created_at: string;
   color: string;
+  is_archived?: boolean;
+  archived_at?: string | null;
 };
 
 export type MemberRole = "owner" | "admin" | "member";

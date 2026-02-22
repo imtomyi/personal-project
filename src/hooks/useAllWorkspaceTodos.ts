@@ -179,5 +179,20 @@ export function useAllWorkspaceTodos() {
     }
   }, [supabase, fetchAll]);
 
-  return { todos, workspaces, loading, addTodo, updateTodo };
+  const archiveWorkspace = useCallback(async (workspaceId: string, archive: boolean) => {
+    const updates = archive
+      ? { is_archived: true, archived_at: new Date().toISOString() }
+      : { is_archived: false, archived_at: null };
+    setWorkspaces((prev) =>
+      prev.map((w) =>
+        w.id === workspaceId ? { ...w, ...updates } : w
+      )
+    );
+    const { error } = await supabase.from("workspaces").update(updates).eq("id", workspaceId);
+    if (error) {
+      await fetchAll();
+    }
+  }, [supabase, fetchAll]);
+
+  return { todos, workspaces, loading, addTodo, updateTodo, archiveWorkspace };
 }

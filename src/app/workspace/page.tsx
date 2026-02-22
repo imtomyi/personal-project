@@ -45,7 +45,7 @@ import type { Todo } from "@/lib/types";
 export default function WorkspacesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo } = useAllWorkspaceTodos();
+  const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo, archiveWorkspace } = useAllWorkspaceTodos();
   const { canvasTodos, canvasCourses, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
   const { entries: ddayEntries } = useDdayEntries();
   const { showToast } = useToast();
@@ -66,6 +66,11 @@ export default function WorkspacesPage() {
   const { habitsWithTime } = useHabits();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
+
+  // ── 활성/아카이브 워크스페이스 분리 ──
+  const activeWorkspaces = useMemo(() => workspaces.filter((w) => !w.is_archived), [workspaces]);
+  const archivedWorkspaces = useMemo(() => workspaces.filter((w) => w.is_archived), [workspaces]);
+  const [showArchived, setShowArchived] = useState(false);
 
   // ── 워크스페이스 맵 (시간표 블록에 워크스페이스 이름 표시용) ──
   const workspaceMap = useMemo(() => {
@@ -485,7 +490,7 @@ export default function WorkspacesPage() {
                   워크스페이스
                 </h1>
                 <p className="text-[11px] text-[#5856D6]/60 sm:text-[12px] dark:text-[#a5a4f3]/60">
-                  {workspaces.length}개 워크스페이스 · {realTodoCount}개 할 일
+                  {activeWorkspaces.length}개 워크스페이스 · {realTodoCount}개 할 일
                 </p>
               </div>
             </div>
@@ -559,7 +564,7 @@ export default function WorkspacesPage() {
                 onChange={(e) => setQuickWsId(e.target.value)}
                 className="max-w-[120px] truncate rounded-lg border-0 bg-black/[0.04] px-2 py-1.5 text-[12px] font-medium text-foreground outline-none sm:max-w-[160px] dark:bg-white/[0.08] dark:text-white"
               >
-                {workspaces.map((ws) => (
+                {activeWorkspaces.map((ws) => (
                   <option key={ws.id} value={ws.id}>
                     {ws.name}
                   </option>
@@ -719,13 +724,53 @@ export default function WorkspacesPage() {
                 </div>
               )}
 
-              {/* Workspace list */}
+              {/* Workspace list — 활성 */}
               <div>
                 <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-secondary">
                   워크스페이스
                 </h2>
-                <WorkspaceList layout="sidebar" wsProgress={wsProgress} workspaceColors={workspaces} wsNextTodo={wsNextTodo} />
+                <WorkspaceList
+                  layout="sidebar"
+                  wsProgress={wsProgress}
+                  workspaceColors={activeWorkspaces}
+                  wsNextTodo={wsNextTodo}
+                  onArchive={archiveWorkspace}
+                  filterWorkspaces={activeWorkspaces}
+                />
               </div>
+
+              {/* Workspace list — 아카이브 */}
+              {archivedWorkspaces.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowArchived(!showArchived)}
+                    className="mb-2 flex w-full items-center gap-1.5 text-[12px] font-medium text-secondary transition-colors hover:text-foreground"
+                  >
+                    <svg
+                      className={`h-3 w-3 transition-transform ${showArchived ? "rotate-90" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                    아카이브 ({archivedWorkspaces.length})
+                  </button>
+                  {showArchived && (
+                    <WorkspaceList
+                      layout="sidebar"
+                      wsProgress={wsProgress}
+                      workspaceColors={archivedWorkspaces}
+                      wsNextTodo={wsNextTodo}
+                      onArchive={archiveWorkspace}
+                      filterWorkspaces={archivedWorkspaces}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

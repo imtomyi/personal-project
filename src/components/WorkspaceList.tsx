@@ -18,11 +18,16 @@ type WorkspaceListProps = {
   workspaceColors?: Workspace[];
   /** 워크스페이스별 다음 마감 할일 */
   wsNextTodo?: Map<string, NextTodoInfo>;
+  /** 아카이브 토글 콜백 */
+  onArchive?: (workspaceId: string, archive: boolean) => Promise<void>;
+  /** 외부에서 제공된 워크스페이스 목록 (있으면 자체 fetch 대신 사용) */
+  filterWorkspaces?: Workspace[];
 };
 
-export default function WorkspaceList({ layout = "grid", wsProgress, workspaceColors, wsNextTodo }: WorkspaceListProps) {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function WorkspaceList({ layout = "grid", wsProgress, workspaceColors, wsNextTodo, onArchive, filterWorkspaces }: WorkspaceListProps) {
+  const [internalWorkspaces, setInternalWorkspaces] = useState<Workspace[]>([]);
+  const [loading, setLoading] = useState(!filterWorkspaces);
+  const workspaces = filterWorkspaces ?? internalWorkspaces;
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const { user } = useAuth();
@@ -34,19 +39,19 @@ export default function WorkspaceList({ layout = "grid", wsProgress, workspaceCo
       .from("workspaces")
       .select("*")
       .order("created_at", { ascending: false });
-    setWorkspaces(data ?? []);
+    setInternalWorkspaces(data ?? []);
     setLoading(false);
   }, [user, supabase]);
 
   const handleWorkspaceCreated = useCallback((newWorkspace: Workspace) => {
-    setWorkspaces((prev) => [newWorkspace, ...prev]);
+    setInternalWorkspaces((prev) => [newWorkspace, ...prev]);
   }, []);
 
   const handleDelete = useCallback(async (wsId: string) => {
     setDeleting(true);
     const { error } = await supabase.from("workspaces").delete().eq("id", wsId);
     if (!error) {
-      setWorkspaces((prev) => prev.filter((w) => w.id !== wsId));
+      setInternalWorkspaces((prev) => prev.filter((w) => w.id !== wsId));
     }
     setConfirmDeleteId(null);
     setDeleting(false);
@@ -57,8 +62,8 @@ export default function WorkspaceList({ layout = "grid", wsProgress, workspaceCo
   }, []);
 
   useEffect(() => {
-    fetchWorkspaces();
-  }, [fetchWorkspaces]);
+    if (!filterWorkspaces) fetchWorkspaces();
+  }, [fetchWorkspaces, filterWorkspaces]);
 
   if (loading) {
     return (
@@ -150,20 +155,43 @@ export default function WorkspaceList({ layout = "grid", wsProgress, workspaceCo
                     </p>
                   )}
                 </div>
-                {/* 삭제 버튼 */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setConfirmDeleteId(ws.id);
-                  }}
-                  className="flex-shrink-0 rounded-md p-1 text-gray-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                  title="워크스페이스 삭제"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {/* 아카이브 / 삭제 버튼 */}
+                <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
+                  {onArchive && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onArchive(ws.id, !ws.is_archived);
+                      }}
+                      className="rounded-md p-1 text-gray-300 transition-all hover:bg-amber-50 hover:text-amber-500 dark:text-gray-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400"
+                      title={ws.is_archived ? "아카이브 해제" : "아카이브"}
+                    >
+                      {ws.is_archived ? (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 6h18M3 14h18M3 18h18" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setConfirmDeleteId(ws.id);
+                    }}
+                    className="rounded-md p-1 text-gray-300 transition-all hover:bg-red-50 hover:text-red-500 dark:text-gray-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    title="워크스페이스 삭제"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </Link>
             </div>
           );
