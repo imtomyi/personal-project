@@ -42,7 +42,8 @@ body {
   overscroll-behavior-y: contain;
 }
 
-html {
+html, body {
+  overflow-x: hidden;
   overscroll-behavior-y: contain;
 }
 
