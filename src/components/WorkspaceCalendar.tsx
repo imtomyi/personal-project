@@ -24,6 +24,7 @@ type WorkspaceCalendarProps = {
   recurringTasks?: RecurringTask[];
   onDeleteRecurringTask?: (id: string) => void;
   onOpenRoutineManager?: () => void;
+  onOpenSchedule?: () => void;
 };
 
 type SpanEntry = {
@@ -63,7 +64,7 @@ type PopoverInfo = {
 };
 
 
-export default function WorkspaceCalendar({ todos, workspaces, loading, canvasConnected, canvasCourses = [], ddayEntries = [], onUpdateTodo, recurringTasks = [], onDeleteRecurringTask, onOpenRoutineManager }: WorkspaceCalendarProps) {
+export default function WorkspaceCalendar({ todos, workspaces, loading, canvasConnected, canvasCourses = [], ddayEntries = [], onUpdateTodo, recurringTasks = [], onDeleteRecurringTask, onOpenRoutineManager, onOpenSchedule }: WorkspaceCalendarProps) {
   const [currentDate, setCurrentDate] = useState(() => nowKST());
   const [hoveredTodo, setHoveredTodo] = useState<string | null>(null);
   const [popover, setPopover] = useState<PopoverInfo | null>(null);
@@ -471,6 +472,14 @@ export default function WorkspaceCalendar({ todos, workspaces, loading, canvasCo
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onOpenSchedule && (
+              <button
+                onClick={onOpenSchedule}
+                className="rounded-full bg-emerald-50 px-3 py-1 text-[12px] font-medium text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+              >
+                📋 오늘 시간표
+              </button>
+            )}
             {onOpenRoutineManager && (
               <button
                 onClick={onOpenRoutineManager}
