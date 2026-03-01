@@ -61,3 +61,61 @@ self.addEventListener("fetch", (event) => {
       )
   );
 });
+
+// ─── Push Notification ───────────────────────────────────────────────
+
+self.addEventListener("push", (event) => {
+  const data = event.data ? event.data.json() : {};
+  const {
+    title = "할 일 알림",
+    body = "",
+    icon = "/icon-192.png",
+    badge = "/icon-192.png",
+    tag = "default",
+    data: notifData = {},
+  } = data;
+
+  const level = notifData.escalation_level ?? 0;
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon,
+      badge,
+      tag,
+      data: notifData,
+      vibrate: level >= 3 ? [300, 100, 300, 100, 300] : [200, 100, 200],
+      requireInteraction: level >= 2,
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const { url, notification_log_id } = event.notification.data || {};
+  const targetUrl = url || "/workspace";
+
+  event.waitUntil(
+    Promise.all([
+      // Navigate to app
+      clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+        for (const client of clientList) {
+          if (client.url.includes(self.location.origin) && "focus" in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
+        }
+        return clients.openWindow(targetUrl);
+      }),
+      // Record click
+      notification_log_id
+        ? fetch("/api/notifications/track", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: notification_log_id, action: "click" }),
+          }).catch(() => {})
+        : Promise.resolve(),
+    ])
+  );
+});

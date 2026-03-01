@@ -38,18 +38,19 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;
-  /* iOS 기본 pull-to-refresh 비활성화 (커스텀 구현 사용) */
-  overscroll-behavior-y: contain;
+  /* 모바일 좌우 스크롤 방지 — clip은 scroll container를 만들지 않아 세로 스크롤 chaining 유지 */
+  overflow-x: clip;
 }
 
-html, body {
+html {
   overflow-x: hidden;
+  /* iOS pull-to-refresh 비활성화 — html에만 적용 (body에 적용하면 scroll chaining 차단됨) */
   overscroll-behavior-y: contain;
 }
 
-/* Apple-style smooth transitions */
+/* Apple-style smooth transitions (transform 제외 — 스크롤 성능 보호) */
 * {
-  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-property: background-color, border-color, color, box-shadow, opacity;
   transition-duration: 0.25s;
   transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
@@ -121,9 +122,11 @@ html, body {
   }
 }
 
-/* Prevent iOS double-tap zoom */
-* {
-  touch-action: manipulation;
+/* Prevent iOS double-tap zoom — standalone PWA only (global * blocks trackpad scroll on PC) */
+@media (display-mode: standalone) {
+  * {
+    touch-action: manipulation;
+  }
 }
 
 /* Smooth momentum scrolling for iOS */

@@ -1,6 +1,6 @@
 {
-  "name": "Collab Todo",
-  "short_name": "Collab Todo",
+  "name": "KHUDO",
+  "short_name": "KHUDO",
   "description": "실시간 협업 할 일 관리 앱",
   "start_url": "/workspace",
   "display": "standalone",

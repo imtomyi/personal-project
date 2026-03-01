@@ -69,30 +69,41 @@ export function useCourses() {
 
     const mapping = new Map<number, string>(); // canvasId → courseId
 
-    for (const cc of canvasCourses) {
-      const { data: existing } = await supabase
-        .from("courses")
-        .select("id")
-        .eq("canvas_course_id", cc.id)
-        .maybeSingle();
+    // 한 번에 기존 매핑 조회 (N+1 → 1 쿼리)
+    const canvasIds = canvasCourses.map((cc) => cc.id);
+    const { data: existingCourses } = await supabase
+      .from("courses")
+      .select("id, canvas_course_id")
+      .in("canvas_course_id", canvasIds);
 
-      if (existing) {
-        mapping.set(cc.id, existing.id);
-      } else {
-        const { data: inserted, error } = await supabase
-          .from("courses")
-          .insert({
+    const existingMap = new Map<number, string>(
+      (existingCourses ?? []).map((c: { id: string; canvas_course_id: number }) => [c.canvas_course_id, c.id])
+    );
+
+    const toInsert = canvasCourses.filter((cc) => !existingMap.has(cc.id));
+
+    // 기존 매핑 추가
+    for (const cc of canvasCourses) {
+      const existingId = existingMap.get(cc.id);
+      if (existingId) mapping.set(cc.id, existingId);
+    }
+
+    // 새 과목 일괄 insert
+    if (toInsert.length > 0) {
+      const { data: inserted } = await supabase
+        .from("courses")
+        .insert(
+          toInsert.map((cc) => ({
             user_id: user.id,
             name: cc.name,
             color: "#8B5CF6",
             canvas_course_id: cc.id,
-          })
-          .select("id")
-          .single();
+          }))
+        )
+        .select("id, canvas_course_id");
 
-        if (!error && inserted) {
-          mapping.set(cc.id, inserted.id);
-        }
+      for (const row of (inserted ?? []) as { id: string; canvas_course_id: number }[]) {
+        mapping.set(row.canvas_course_id, row.id);
       }
     }
 

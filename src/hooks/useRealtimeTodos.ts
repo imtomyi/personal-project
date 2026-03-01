@@ -31,7 +31,7 @@ export function useRealtimeTodos(workspaceId: string) {
     onChanged: fetchTodos,
   });
 
-  async function addTodo(title: string, description?: string, dueDate?: string, durationDays?: number, goalId?: string) {
+  async function addTodo(title: string, description?: string, dueDate?: string, durationDays?: number, goalId?: string, dueTime?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     const nextOrder = (todos.length > 0 ? Math.max(...todos.map(t => t.sort_order)) : 0) + 1;
     const finalDueDate = dueDate || todayKST();
@@ -46,6 +46,7 @@ export function useRealtimeTodos(workspaceId: string) {
       assigned_to: null,
       created_by: user?.id ?? null,
       due_date: finalDueDate,
+      due_time: dueTime || null,
       duration_days: finalDuration,
       sort_order: nextOrder,
       created_at: new Date().toISOString(),
@@ -62,6 +63,7 @@ export function useRealtimeTodos(workspaceId: string) {
       description: description || null,
       created_by: user?.id,
       due_date: finalDueDate,
+      due_time: dueTime || null,
       duration_days: finalDuration,
       sort_order: nextOrder,
       ...(goalId ? { goal_id: goalId } : {}),
@@ -76,7 +78,7 @@ export function useRealtimeTodos(workspaceId: string) {
     await fetchTodos();
   }
 
-  async function updateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "sort_order" | "priority" | "status">>) {
+  async function updateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "due_time" | "duration_days" | "sort_order" | "priority" | "status">>) {
     setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
 
     const { error } = await supabase
@@ -154,12 +156,15 @@ export function useRealtimeTodos(workspaceId: string) {
     }));
 
     try {
-      for (const update of updates) {
-        await supabase
-          .from("todos")
-          .update({ sort_order: update.sort_order })
-          .eq("id", update.id);
-      }
+      // 병렬 업데이트 (N+1 → 동시 실행)
+      await Promise.all(
+        updates.map((update) =>
+          supabase
+            .from("todos")
+            .update({ sort_order: update.sort_order })
+            .eq("id", update.id)
+        )
+      );
     } catch {
       await fetchTodos();
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { Todo } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import { SESSION_DURATION_PRESETS } from "@/lib/constants";
@@ -40,16 +40,16 @@ export default function DailyPlanTriage({
   const [slideDir, setSlideDir] = useState<"" | "slide-left" | "slide-right">("");
 
   // 미계획, 미완료, 실제 할 일 (섹션헤더/하위 제외)
-  const unplannedTodos = useMemo(
-    () =>
-      todos.filter(
-        (t) =>
-          !t.is_completed &&
-          t.description !== SECTION_HEADER_MARKER &&
-          !t.parent_id &&
-          !triagedTodoIds.has(t.id),
-      ),
-    [todos, triagedTodoIds],
+  // useState lazy initializer로 마운트 시점 스냅샷 고정
+  // → triagedTodoIds 변화로 목록이 줄어들지 않아 인덱스 기반 탐색이 정확함
+  const [unplannedTodos] = useState(() =>
+    todos.filter(
+      (t) =>
+        !t.is_completed &&
+        t.description !== SECTION_HEADER_MARKER &&
+        !t.parent_id &&
+        !triagedTodoIds.has(t.id),
+    ),
   );
 
   const currentTodo = unplannedTodos[currentIndex];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRoutines } from "@/hooks/useRoutines";
 import type { RecurrenceType, Routine, RoutineMode } from "@/lib/types";
 import { RECURRENCE_OPTIONS, WEEKDAY_LABELS } from "@/lib/constants";
@@ -11,6 +11,80 @@ type RoutineManagerProps = {
 };
 
 const HABIT_EMOJIS = ["✅", "💪", "📚", "🏃", "💧", "🧘", "🎯", "💤", "🍎", "📝"];
+
+const HOURS = Array.from({ length: 18 }, (_, i) => i + 5); // 05~22
+const MINUTES = [0, 15, 30, 45];
+
+/** "HH:MM" → { h, m } */
+function parseTime(t: string | null): { h: number; m: number } | null {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  return { h, m };
+}
+/** { h, m } → "HH:MM" */
+function formatHM(h: number, m: number): string {
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/* ── Compact Time Picker ── */
+function TimePicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const parsed = parseTime(value || null);
+  const h = parsed?.h ?? -1;
+  const m = parsed?.m ?? -1;
+
+  const setHour = useCallback(
+    (hour: number) => {
+      const minute = m >= 0 ? m : 0;
+      onChange(formatHM(hour, minute));
+    },
+    [m, onChange],
+  );
+
+  const setMinute = useCallback(
+    (minute: number) => {
+      const hour = h >= 0 ? h : 9;
+      onChange(formatHM(hour, minute));
+    },
+    [h, onChange],
+  );
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[11px] font-medium text-secondary">{label}</span>
+      <div className="flex items-center rounded-lg bg-[#f5f5f7] dark:bg-white/[0.06]">
+        <select
+          value={h >= 0 ? h : ""}
+          onChange={(e) => setHour(Number(e.target.value))}
+          className="cursor-pointer appearance-none bg-transparent py-1 pl-2 pr-0.5 text-center text-[12px] font-medium text-foreground outline-none dark:text-white"
+        >
+          <option value="" disabled>--</option>
+          {HOURS.map((hour) => (
+            <option key={hour} value={hour}>{String(hour).padStart(2, "0")}</option>
+          ))}
+        </select>
+        <span className="text-[11px] text-secondary/60">:</span>
+        <select
+          value={m >= 0 ? m : ""}
+          onChange={(e) => setMinute(Number(e.target.value))}
+          className="cursor-pointer appearance-none bg-transparent py-1 pl-0.5 pr-2 text-center text-[12px] font-medium text-foreground outline-none dark:text-white"
+        >
+          <option value="" disabled>--</option>
+          {MINUTES.map((min) => (
+            <option key={min} value={min}>{String(min).padStart(2, "0")}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
 
 export default function RoutineManager({ workspaceId, onClose }: RoutineManagerProps) {
   const { routines, loading, addRoutine, updateRoutine, deleteRoutine } = useRoutines(workspaceId);
@@ -23,6 +97,7 @@ export default function RoutineManager({ workspaceId, onClose }: RoutineManagerP
   const [newDays, setNewDays] = useState<number[]>([]);
   const [newTimeStart, setNewTimeStart] = useState("");
   const [newTimeEnd, setNewTimeEnd] = useState("");
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null);
 
   function toggleDay(arr: number[], day: number): number[] {
     return arr.includes(day) ? arr.filter((d) => d !== day) : [...arr, day].sort();
@@ -206,26 +281,15 @@ export default function RoutineManager({ workspaceId, onClose }: RoutineManagerP
                 </div>
               )}
 
-              {/* Time range */}
-              <div className="mb-3 flex gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-[11px] font-medium text-secondary">시작 시간</label>
-                  <input
-                    type="time"
-                    value={newTimeStart}
-                    onChange={(e) => setNewTimeStart(e.target.value)}
-                    className="w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-[12px] dark:border-white/[0.1] dark:bg-[#1c1c1e] dark:text-white"
-                  />
+              {/* Time range — compact inline picker */}
+              <div className="mb-3">
+                <label className="mb-1 block text-[11px] font-medium text-secondary">시간 설정</label>
+                <div className="flex items-center gap-2">
+                  <TimePicker label="시작" value={newTimeStart} onChange={setNewTimeStart} />
+                  <span className="text-[11px] text-secondary/50">~</span>
+                  <TimePicker label="종료" value={newTimeEnd} onChange={setNewTimeEnd} />
                 </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-[11px] font-medium text-secondary">종료 시간</label>
-                  <input
-                    type="time"
-                    value={newTimeEnd}
-                    onChange={(e) => setNewTimeEnd(e.target.value)}
-                    className="w-full rounded-lg border border-black/[0.08] bg-white px-2 py-1.5 text-[12px] dark:border-white/[0.1] dark:bg-[#1c1c1e] dark:text-white"
-                  />
-                </div>
+                <p className="mt-1 text-[10px] text-secondary/60">미설정 시 빈 시간에 자동 배치</p>
               </div>
 
               <div className="flex justify-end gap-2">
@@ -261,67 +325,116 @@ export default function RoutineManager({ workspaceId, onClose }: RoutineManagerP
             </div>
           ) : (
             <div className="space-y-2">
-              {routines.map((routine) => (
-                <div
-                  key={`${routine._source}-${routine.id}`}
-                  className="group flex items-center gap-3 rounded-xl border border-black/[0.06] bg-white p-3 dark:border-white/[0.08] dark:bg-[#1c1c1e]"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">{routine.emoji}</span>
-                      <p className="truncate text-[13px] font-medium text-foreground dark:text-[#e5e5e7]">
-                        {routine.name}
-                      </p>
-                      <span
-                        className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
-                          routine.mode === "habit"
-                            ? "bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
-                            : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                        }`}
-                      >
-                        {routine.mode === "habit" ? "습관" : "할일"}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
-                        {getRecurrenceLabel(routine.recurrence)}
-                      </span>
-                      {routine.time_start && (
-                        <span className="text-[10px] text-secondary">
-                          {routine.time_start}
-                          {routine.time_end ? ` - ${routine.time_end}` : ""}
-                        </span>
-                      )}
-                      {routine.days_of_week.length > 0 && (
-                        <span className="text-[10px] text-secondary">
-                          {formatDays(routine.days_of_week)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+              {routines.map((routine) => {
+                const isEditingTime = editingTimeId === `${routine._source}-${routine.id}`;
+                const routineKey = `${routine._source}-${routine.id}`;
+                return (
+                  <div
+                    key={routineKey}
+                    className="group rounded-xl border border-black/[0.06] bg-white dark:border-white/[0.08] dark:bg-[#1c1c1e]"
+                  >
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{routine.emoji}</span>
+                          <p className="truncate text-[13px] font-medium text-foreground dark:text-[#e5e5e7]">
+                            {routine.name}
+                          </p>
+                          <span
+                            className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+                              routine.mode === "habit"
+                                ? "bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
+                                : "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                            }`}
+                          >
+                            {routine.mode === "habit" ? "습관" : "할일"}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                            {getRecurrenceLabel(routine.recurrence)}
+                          </span>
+                          {/* Time badge — clickable to edit */}
+                          <button
+                            onClick={() => setEditingTimeId(isEditingTime ? null : routineKey)}
+                            className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                              routine.time_start
+                                ? "bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-900/20 dark:text-violet-400 dark:hover:bg-violet-900/30"
+                                : "bg-orange-50 text-orange-500 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400 dark:hover:bg-orange-900/30"
+                            }`}
+                          >
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {routine.time_start
+                              ? `${routine.time_start}${routine.time_end ? ` - ${routine.time_end}` : ""}`
+                              : "시간 설정"}
+                          </button>
+                          {routine.days_of_week.length > 0 && (
+                            <span className="text-[10px] text-secondary">
+                              {formatDays(routine.days_of_week)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => updateRoutine(routine, { is_active: !routine.is_active })}
-                      className={`rounded-lg px-2 py-1 text-[11px] font-medium ${
-                        routine.is_active
-                          ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
-                      }`}
-                    >
-                      {routine.is_active ? "활성" : "비활성"}
-                    </button>
-                    <button
-                      onClick={() => deleteRoutine(routine)}
-                      className="rounded p-1 text-secondary opacity-0 hover:text-red-500 group-hover:opacity-100"
-                    >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => updateRoutine(routine, { is_active: !routine.is_active })}
+                          className={`rounded-lg px-2 py-1 text-[11px] font-medium ${
+                            routine.is_active
+                              ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                          }`}
+                        >
+                          {routine.is_active ? "활성" : "비활성"}
+                        </button>
+                        <button
+                          onClick={() => deleteRoutine(routine)}
+                          className="rounded p-1 text-secondary opacity-0 hover:text-red-500 group-hover:opacity-100"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Inline time editor */}
+                    {isEditingTime && (
+                      <div className="border-t border-black/[0.04] px-3 pb-2.5 pt-2 dark:border-white/[0.06]">
+                        <div className="flex items-center gap-2">
+                          <TimePicker
+                            label="시작"
+                            value={routine.time_start ?? ""}
+                            onChange={(v) => updateRoutine(routine, { time_start: v || null })}
+                          />
+                          <span className="text-[11px] text-secondary/50">~</span>
+                          <TimePicker
+                            label="종료"
+                            value={routine.time_end ?? ""}
+                            onChange={(v) => updateRoutine(routine, { time_end: v || null })}
+                          />
+                          {routine.time_start && (
+                            <button
+                              onClick={() => {
+                                updateRoutine(routine, { time_start: null, time_end: null });
+                                setEditingTimeId(null);
+                              }}
+                              className="ml-auto flex-shrink-0 rounded-md px-2 py-1 text-[10px] font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              해제
+                            </button>
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-[10px] text-secondary/60">
+                          {routine.time_start ? "시간표에 고정 배치" : "미설정 시 자동 배치"}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

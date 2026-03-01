@@ -77,7 +77,7 @@ export async function GET(request: Request) {
     "PRODID:-//CollabTodo//CollabTodo//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:Collab Todo`,
+    `X-WR-CALNAME:KHUDO`,
   ];
 
   for (const todo of todos ?? []) {

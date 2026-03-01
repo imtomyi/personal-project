@@ -20,7 +20,7 @@ import type { Todo, Member } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
 import TodoItem from "./TodoItem";
-import Comments from "./Comments";
+import Comments from "@/components/workspace/Comments";
 
 type TodoListProps = {
   todos: Todo[];

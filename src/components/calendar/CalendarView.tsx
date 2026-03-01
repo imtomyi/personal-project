@@ -5,7 +5,7 @@ import type { Todo } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import { parseLocalDate, nowKST, todayKST, toDateStr, getDurationInDays, formatDuration } from "@/lib/date";
 import { WEEKDAY_LABELS } from "@/lib/constants";
-import CalendarTodoPopup from "./CalendarTodoPopup";
+import CalendarTodoPopup from "@/components/todo/CalendarTodoPopup";
 
 type CalendarViewProps = {
   todos: Todo[];

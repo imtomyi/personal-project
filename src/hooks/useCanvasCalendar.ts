@@ -36,6 +36,7 @@ function canvasAssignmentToTodo(
     assigned_to: null,
     created_by: null,
     due_date: dueDate,
+    due_time: null,
     duration_days: 24, // 기본 1일 (hours)
     sort_order: 0,
     parent_id: null,
@@ -101,40 +102,35 @@ export function useCanvasCalendar() {
       }));
       setCanvasCourses(courseList);
 
-      // 2. Fetch all assignments
-      const allTodos: WorkspaceTodo[] = [];
-      for (const course of courses) {
-        try {
+      // 2. Fetch all assignments (병렬)
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+      const assignmentResults = await Promise.allSettled(
+        courses.map(async (course) => {
           const assignRes = await fetch(
             `/api/canvas?token=${encodeURIComponent(token)}&endpoint=${encodeURIComponent(
               `courses/${course.id}/assignments?per_page=50&order_by=due_at`
             )}`
           );
           const assignData = await assignRes.json();
-          if (assignData.error) continue;
+          if (assignData.error) return [];
 
           const assignments: CanvasAssignment[] = Array.isArray(assignData)
             ? assignData
             : [];
 
-          // 2주 이상 지난 과제는 캘린더에서 제외
-          const twoWeeksAgo = new Date();
-          twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+          return assignments
+            .filter((a) => a.due_at && new Date(a.due_at) >= twoWeeksAgo)
+            .map((a) =>
+              canvasAssignmentToTodo(a, courseMap.get(a.course_id) || course.name)
+            );
+        })
+      );
 
-          for (const a of assignments) {
-            // due_at이 있는 과제만 캘린더에 표시
-            if (a.due_at) {
-              const dueDate = new Date(a.due_at);
-              if (dueDate < twoWeeksAgo) continue; // 오래된 과제 제외
-              allTodos.push(
-                canvasAssignmentToTodo(a, courseMap.get(a.course_id) || course.name)
-              );
-            }
-          }
-        } catch {
-          // 개별 코스 에러는 무시
-        }
-      }
+      const allTodos: WorkspaceTodo[] = assignmentResults
+        .filter((r): r is PromiseFulfilledResult<WorkspaceTodo[]> => r.status === "fulfilled")
+        .flatMap((r) => r.value);
 
       setCanvasTodos(allTodos);
 

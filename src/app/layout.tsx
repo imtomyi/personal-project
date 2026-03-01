@@ -2,21 +2,22 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ToastProvider } from "@/context/ToastContext";
-import GlobalShortcuts from "@/components/GlobalShortcuts";
-import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import InstallPrompt from "@/components/InstallPrompt";
-import PullToRefresh from "@/components/PullToRefresh";
+import GlobalShortcuts from "@/components/layout/GlobalShortcuts";
+import ServiceWorkerRegister from "@/components/layout/ServiceWorkerRegister";
+import InstallPrompt from "@/components/layout/InstallPrompt";
+import PullToRefresh from "@/components/layout/PullToRefresh";
+import ActivityTracker from "@/components/layout/ActivityTracker";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Collab Todo - Realtime Collaborative Todo & Notes",
+  title: "KHUDO - 쿠두",
   description:
     "실시간 협업 할 일 관리 앱",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Collab Todo",
+    title: "KHUDO",
   },
   icons: {
     icon: "/icon-192.png",
@@ -50,6 +51,7 @@ export default function RootLayout({
           <AuthProvider>
             <ToastProvider>
               <ServiceWorkerRegister />
+              <ActivityTracker />
               <GlobalShortcuts />
               <PullToRefresh>
                 {children}

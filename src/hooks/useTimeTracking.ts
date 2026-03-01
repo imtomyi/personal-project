@@ -18,7 +18,7 @@ export function useTimeTracking(workspaceId: string) {
     if (!user) return;
     const { data } = await supabase
       .from("time_entries")
-      .select("*")
+      .select("id, todo_id, started_at, ended_at, duration_sec")
       .eq("workspace_id", workspaceId)
       .eq("user_id", user.id)
       .order("started_at", { ascending: false });

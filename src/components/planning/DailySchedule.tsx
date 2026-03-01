@@ -8,11 +8,10 @@ import {
   autoAssignTodos,
   autoAssignDailyPlans,
   placeDdayBlocks,
-  minutesToTime,
   type ScheduleBlock,
   type ScheduleBlockType,
 } from "@/lib/autoScheduler";
-import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
+import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -273,6 +272,8 @@ export default function DailySchedule({
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  // 완료 애니메이션: 취소선 + 페이드아웃 후 실제 업데이트
+  const [completedBlockIds, setCompletedBlockIds] = useState<Set<string>>(new Set());
   const timelineRef = useRef<HTMLDivElement>(null);
   const hasPersisted = useRef(false);
 
@@ -290,7 +291,8 @@ export default function DailySchedule({
         t.description !== SECTION_HEADER_MARKER &&
         !t.parent_id &&
         t.due_date === today &&
-        !scheduledIds.has(t.id),
+        !scheduledIds.has(t.id) &&
+        !t.recurring_task_id, // 반복일정에서 자동 생성된 할일은 제외
     );
   }, [todos, dailyPlans, today]);
 
@@ -431,6 +433,15 @@ export default function DailySchedule({
     if (ddayEntries && ddayEntries.length > 0) {
       result = placeDdayBlocks(result, ddayEntries);
     }
+    // 동일 제목 + 동일 타입의 중복 블록 제거 (같은 할일이 여러 경로로 생성된 경우)
+    const seenKeys = new Set<string>();
+    result = result.filter(b => {
+      if (!b.todoId) return true; // recurring, habit, class 등은 통과
+      const key = `${b.title}::${b.type}`;
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
     return result;
   }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today, ddayEntries]);
 
@@ -439,15 +450,30 @@ export default function DailySchedule({
   const minBlockMinutes = compact ? (18 / 30) * 60 : (24 / 48) * 60; // compact: 36min, full: 30min
   const columnLayout = useMemo(() => computeColumnLayout(blocks, minBlockMinutes), [blocks, minBlockMinutes]);
 
-  // 가시 범위 계산 (블록이 있는 시간대 + 현재 시각 기준)
+  // 항상 전체 범위를 보여주고 스크롤 가능하도록 (compact 모드는 기존 가시 범위 유지)
   const visibleRange = useMemo(
     () => getVisibleRange(blocks, currentMinutes),
     [blocks, currentMinutes],
   );
-  const visStartHour = compact ? START_HOUR : visibleRange.startHour;
-  const visEndHour = compact ? END_HOUR : visibleRange.endHour;
+  const visStartHour = compact ? visibleRange.startHour : START_HOUR;
+  const visEndHour = compact ? visibleRange.endHour : END_HOUR;
   const visTotalHours = visEndHour - visStartHour;
   const currentTopPx = ((currentMinutes - visStartHour * 60) / 60) * HOUR_HEIGHT;
+
+  // 스크롤 컨테이너: 마운트 후 현재 시각으로 자동 스크롤
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (compact) return;
+    const timer = setTimeout(() => {
+      if (!scrollContainerRef.current) return;
+      const now2 = nowKST();
+      const mins = now2.getHours() * 60 + now2.getMinutes();
+      const topPx = ((mins - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+      scrollContainerRef.current.scrollTop = Math.max(0, topPx - 80);
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Unscheduled todos
   const scheduledTodoIds = new Set(
@@ -492,6 +518,9 @@ export default function DailySchedule({
 
   function handlePointerMove(e: React.PointerEvent) {
     if (!dragState) return;
+    // 모바일: 드래그 중 페이지 스크롤 방지
+    e.preventDefault();
+    e.stopPropagation();
     const deltaY = e.clientY - dragState.initialMouseY;
     const deltaMin = (deltaY / HOUR_HEIGHT) * 60;
 
@@ -691,9 +720,14 @@ export default function DailySchedule({
         )}
 
         <div
+          ref={scrollContainerRef}
           className={`relative ${
-            compact ? "overflow-hidden rounded-lg" : "card-surface overflow-hidden p-0"
+            compact ? "overflow-hidden rounded-lg" : "card-surface max-h-[480px] p-0"
           }`}
+          style={{
+            overflowY: compact ? "hidden" : dragState ? "hidden" : "auto",
+            touchAction: dragState ? "none" : "auto",
+          }}
         >
           <div
             ref={timelineRef}
@@ -757,44 +791,52 @@ export default function DailySchedule({
 
             {/* Schedule blocks */}
             {blocks.filter(b => b.endMin > visStartHour * 60 && b.startMin < visEndHour * 60).map((block) => {
-              const style = getBlockStyle(block, visStartHour);
+              const blockStyle = getBlockStyle(block, visStartHour);
               const colorCfg = getBlockColorResolved(block);
               const isDragging = dragState?.blockId === block.id;
               const isDraggable = !!block.planId && !compact;
+              const todoForBlock = block.todoId ? todos.find(t => t.id === block.todoId) : null;
+              const isCompleted = completedBlockIds.has(block.id) || !!todoForBlock?.is_completed;
 
               return (
                 <div
                   key={block.id}
-                  className={`group absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 ${colorCfg.border} ${colorCfg.bg} ${
+                  className={`group absolute z-10 flex items-start overflow-hidden rounded-lg border px-2 py-1 transition-all duration-500 ${
+                    isCompleted
+                      ? "border-emerald-300/60 bg-emerald-50/50 opacity-60 dark:border-emerald-700/40 dark:bg-emerald-900/10"
+                      : `${colorCfg.border} ${colorCfg.bg}`
+                  } ${
                     isDragging ? "z-30 shadow-lg opacity-90 ring-2 ring-[#007AFF]/30" : ""
-                  } ${isDraggable ? "cursor-grab active:cursor-grabbing" : ""}`}
-                  style={style}
+                  } ${isDraggable && !isCompleted ? "cursor-grab active:cursor-grabbing" : ""} ${
+                    !compact && block.todoId ? "pr-10" : ""
+                  }`}
+                  style={blockStyle}
                   onPointerDown={
-                    isDraggable
+                    isDraggable && !isCompleted
                       ? (e) => handlePointerDown(e, block, "move")
                       : undefined
                   }
                 >
                   {/* Drag grip icon for draggable blocks */}
-                  {isDraggable && (
+                  {isDraggable && !isCompleted && (
                     <span className="mr-1 mt-0.5 flex-shrink-0 text-[9px] text-secondary/50 select-none">
                       ⠿
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
                     <p
-                      className={`truncate font-medium ${colorCfg.text} ${
+                      className={`truncate font-medium ${
                         compact ? "text-[9px]" : "text-[11px]"
-                      }`}
+                      } ${isCompleted ? "line-through text-emerald-600/70 dark:text-emerald-400/60" : colorCfg.text}`}
                     >
-                      {colorCfg.icon && `${colorCfg.icon} `}
+                      {isCompleted ? "" : colorCfg.icon ? `${colorCfg.icon} ` : ""}
                       {block.title}
                       {block.courseName &&
                         block.type === "study" &&
                         ` · ${block.courseName}`}
                     </p>
                     {!compact && (
-                      <p className="text-[9px] text-secondary">
+                      <p className={`text-[9px] ${isCompleted ? "text-emerald-500/50 dark:text-emerald-500/40" : "text-secondary"}`}>
                         {isDragging
                           ? `${minutesToTime(dragState!.currentStartMin)} - ${minutesToTime(dragState!.currentEndMin)}`
                           : `${minutesToTime(block.startMin)} - ${minutesToTime(block.endMin)}`}
@@ -806,30 +848,55 @@ export default function DailySchedule({
                       </p>
                     )}
                   </div>
+                  {/* 완료/미완료 토글 — absolute right-center로 블록 높이 무관하게 동일 위치 */}
                   {!compact && block.todoId && !isDragging && (
                     <button
+                      onPointerDown={(e) => {
+                        // 드래그 핸들러가 pointerdown을 가로채서 click이 안 되므로
+                        // 체크 영역에서는 pointerdown 전파를 차단
+                        e.stopPropagation();
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUpdate(block.todoId!, {
-                          is_completed: true,
-                          status: "done",
-                        });
+                        if (isCompleted) {
+                          setCompletedBlockIds(prev => {
+                            const s = new Set(prev);
+                            s.delete(block.id);
+                            return s;
+                          });
+                          onUpdate(block.todoId!, {
+                            is_completed: false,
+                            status: "todo",
+                          });
+                        } else {
+                          setCompletedBlockIds(prev => new Set(prev).add(block.id));
+                          setTimeout(() => {
+                            onUpdate(block.todoId!, {
+                              is_completed: true,
+                              status: "done",
+                            });
+                          }, 800);
+                        }
                       }}
-                      className="mt-0.5 flex-shrink-0 rounded p-0.5 text-secondary hover:text-emerald-600"
+                      className={`absolute right-0 top-0 bottom-0 z-20 flex w-10 items-center justify-center transition-colors active:scale-95 active:bg-black/5 dark:active:bg-white/10 ${
+                        isCompleted
+                          ? "text-emerald-500 hover:text-gray-400 dark:text-emerald-400 dark:hover:text-gray-500"
+                          : "text-secondary hover:text-emerald-600"
+                      }`}
                     >
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
+                      {isCompleted ? (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 dark:bg-emerald-600">
+                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      ) : (
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-current">
+                          <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
                     </button>
                   )}
                   {/* 반복일정 삭제 버튼 */}
@@ -849,7 +916,7 @@ export default function DailySchedule({
                     </button>
                   )}
                   {/* Resize handle at bottom */}
-                  {isDraggable && !isDragging && (
+                  {isDraggable && !isDragging && !isCompleted && (
                     <div
                       className="absolute bottom-0 left-0 right-0 flex cursor-s-resize justify-center py-0.5"
                       onPointerDown={(e) => {

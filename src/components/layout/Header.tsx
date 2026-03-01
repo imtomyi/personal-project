@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import NotificationBell from "@/components/NotificationBell";
+import NotificationBell from "@/components/layout/NotificationBell";
 
 const NAV_ITEMS = [
   { href: "/workspace", label: "워크스페이스", icon: "📋" },
@@ -25,7 +25,7 @@ export default function Header() {
             href="/workspace"
             className="mr-0.5 flex-shrink-0 text-[15px] font-semibold tracking-tight text-foreground md:mr-1 md:text-lg dark:text-white"
           >
-            Collab Todo
+            KHUDO
           </Link>
 
           {user && (

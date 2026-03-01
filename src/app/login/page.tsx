@@ -53,7 +53,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Collab Todo
+            KHUDO
           </h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             Realtime collaborative task management

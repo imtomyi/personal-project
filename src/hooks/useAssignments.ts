@@ -124,35 +124,44 @@ export function useAssignments(courseId?: string) {
 
     let nextOrder = (assignments.length > 0 ? Math.max(...assignments.map((a) => a.sort_order)) : 0) + 1;
 
-    for (const ca of canvasAssignments) {
-      const dbCourseId = courseMapping.get(ca.course_id);
-      if (!dbCourseId) continue;
+    // 한 번에 기존 매핑 조회 (N+1 → 1 쿼리)
+    const canvasIds = canvasAssignments.map((ca) => ca.id);
+    const { data: existingAssignments } = await supabase
+      .from("assignments")
+      .select("id, canvas_assignment_id")
+      .in("canvas_assignment_id", canvasIds);
 
-      const { data: existing } = await supabase
-        .from("assignments")
-        .select("id")
-        .eq("canvas_assignment_id", ca.id)
-        .maybeSingle();
+    const existingMap = new Map<number, string>(
+      (existingAssignments ?? []).map((a: { id: string; canvas_assignment_id: number }) => [a.canvas_assignment_id, a.id])
+    );
 
-      if (existing) {
-        // 마감일만 업데이트
-        if (ca.due_at) {
-          await supabase
-            .from("assignments")
-            .update({ due_date: ca.due_at.slice(0, 10) })
-            .eq("id", existing.id);
-        }
-      } else {
-        await supabase.from("assignments").insert({
-          user_id: user.id,
-          course_id: dbCourseId,
-          title: ca.name,
-          type: "assignment" as const,
-          due_date: ca.due_at ? ca.due_at.slice(0, 10) : null,
-          canvas_assignment_id: ca.id,
-          sort_order: nextOrder++,
-        });
-      }
+    // 기존 과제 마감일 업데이트 (배치)
+    const toUpdate = canvasAssignments
+      .filter((ca) => existingMap.has(ca.id) && ca.due_at)
+      .map((ca) => ({
+        id: existingMap.get(ca.id)!,
+        due_date: ca.due_at!.slice(0, 10),
+      }));
+
+    for (const upd of toUpdate) {
+      await supabase.from("assignments").update({ due_date: upd.due_date }).eq("id", upd.id);
+    }
+
+    // 새 과제 일괄 insert
+    const toInsert = canvasAssignments
+      .filter((ca) => !existingMap.has(ca.id) && courseMapping.get(ca.course_id))
+      .map((ca) => ({
+        user_id: user.id,
+        course_id: courseMapping.get(ca.course_id)!,
+        title: ca.name,
+        type: "assignment" as const,
+        due_date: ca.due_at ? ca.due_at.slice(0, 10) : null,
+        canvas_assignment_id: ca.id,
+        sort_order: nextOrder++,
+      }));
+
+    if (toInsert.length > 0) {
+      await supabase.from("assignments").insert(toInsert);
     }
 
     await fetchAssignments();

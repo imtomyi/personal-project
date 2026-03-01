@@ -24,7 +24,7 @@ import { useAllWorkspaceTodos } from "@/hooks/useAllWorkspaceTodos";
 import { useWidgetConfig } from "@/hooks/useWidgetConfig";
 import type { WidgetId } from "@/lib/types";
 import { KHU_QUICK_LINKS } from "@/lib/constants";
-import Header from "@/components/Header";
+import Header from "@/components/layout/Header";
 import KhuSidebar from "@/components/khu/KhuSidebar";
 import KhuAcademicCalendar from "@/components/khu/KhuAcademicCalendar";
 import KhuShuttleInfo from "@/components/khu/KhuShuttleInfo";

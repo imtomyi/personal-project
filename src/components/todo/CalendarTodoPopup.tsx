@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { Todo } from "@/lib/types";
-import DurationPicker from "./DurationPicker";
-import DatePicker from "./DatePicker";
+import DurationPicker from "@/components/planning/DurationPicker";
+import DatePicker from "@/components/calendar/DatePicker";
 import { fmtDateKST, toDateStr, parseLocalDate, nowKST, getDurationInDays, todayKST } from "@/lib/date";
 
 type CalendarTodoPopupProps = {

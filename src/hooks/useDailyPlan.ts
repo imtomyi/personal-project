@@ -176,17 +176,20 @@ export function useDailyPlan(dateStr?: string) {
           : p;
       }),
     );
-    // Persist each
-    for (const upd of updates) {
-      await supabase
-        .from("daily_plans")
-        .update({
-          scheduled_start_min: upd.startMin,
-          scheduled_end_min: upd.endMin,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", upd.id);
-    }
+    // 병렬 업데이트 (N+1 → 동시 실행)
+    const now = new Date().toISOString();
+    await Promise.all(
+      updates.map((upd) =>
+        supabase
+          .from("daily_plans")
+          .update({
+            scheduled_start_min: upd.startMin,
+            scheduled_end_min: upd.endMin,
+            updated_at: now,
+          })
+          .eq("id", upd.id)
+      )
+    );
   }
 
   // 계획 삭제

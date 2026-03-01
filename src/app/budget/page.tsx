@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useExpenses } from "@/hooks/useExpenses";
-import Header from "@/components/Header";
+import Header from "@/components/layout/Header";
 import AddExpense from "@/components/budget/AddExpense";
 import ExpenseList from "@/components/budget/ExpenseList";
 import ExpenseStats from "@/components/budget/ExpenseStats";

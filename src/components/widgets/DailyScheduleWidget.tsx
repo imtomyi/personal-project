@@ -10,10 +10,9 @@ import {
   generateSchedule,
   autoAssignTodos,
   autoAssignDailyPlans,
-  minutesToTime,
   type ScheduleBlock,
 } from "@/lib/autoScheduler";
-import { todayKST, nowKST, parseLocalDate } from "@/lib/date";
+import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
 
 const START_HOUR = 6;
 const END_HOUR = 24;

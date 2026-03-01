@@ -55,7 +55,7 @@ export default function InstallPrompt() {
             {/* App icon */}
             <img
               src="/icon-192.png"
-              alt="Collab Todo"
+              alt="KHUDO"
               className="h-12 w-12 flex-shrink-0 rounded-xl"
             />
 

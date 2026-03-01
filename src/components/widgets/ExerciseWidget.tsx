@@ -275,7 +275,7 @@ export default function ExerciseWidget() {
   const maxWeekMin = Math.max(...weekData.map((d) => d.min), 60);
 
   return (
-    <div className="card-surface p-5">
+    <div className="card-surface overflow-hidden p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white">
           💪 운동 세션

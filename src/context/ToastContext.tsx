@@ -4,15 +4,21 @@ import { createContext, useContext, useState, useCallback } from "react";
 
 type ToastType = "success" | "error" | "info";
 
+type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
 type Toast = {
   id: string;
   message: string;
   type: ToastType;
+  action?: ToastAction;
 };
 
 type ToastContextType = {
   toasts: Toast[];
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType, action?: ToastAction) => void;
 };
 
 const ToastContext = createContext<ToastContextType>({
@@ -27,14 +33,19 @@ export function useToast() {
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const showToast = useCallback((message: string, type: ToastType = "success") => {
-    const id = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id, message, type }]);
-
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  const showToast = useCallback((message: string, type: ToastType = "success", action?: ToastAction) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, message, type, action }]);
+
+    // action이 있으면 5초, 없으면 3초 후 자동 닫힘
+    setTimeout(() => {
+      removeToast(id);
+    }, action ? 5000 : 3000);
+  }, [removeToast]);
 
   return (
     <ToastContext.Provider value={{ toasts, showToast }}>
@@ -69,6 +80,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 </svg>
               )}
               {toast.message}
+              {toast.action && (
+                <button
+                  onClick={() => {
+                    toast.action!.onClick();
+                    removeToast(toast.id);
+                  }}
+                  className="ml-2 rounded-md bg-white/20 px-2 py-0.5 text-xs font-semibold transition-colors hover:bg-white/30"
+                >
+                  {toast.action.label}
+                </button>
+              )}
             </div>
           </div>
         ))}

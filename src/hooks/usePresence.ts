@@ -10,6 +10,13 @@ type PresenceUser = {
   online_at: string;
 };
 
+type PresenceData = {
+  user_id: string;
+  name: string;
+  avatar_url: string | null;
+  online_at: string;
+};
+
 export function usePresence(workspaceId: string) {
   const { user, profile } = useAuth();
   const [onlineUsers, setOnlineUsers] = useState<PresenceUser[]>([]);
@@ -27,7 +34,7 @@ export function usePresence(workspaceId: string) {
         const state = channel.presenceState();
         const users: PresenceUser[] = [];
         for (const [, presences] of Object.entries(state)) {
-          for (const p of presences as any[]) {
+          for (const p of presences as PresenceData[]) {
             users.push({
               user_id: p.user_id,
               name: p.name,
