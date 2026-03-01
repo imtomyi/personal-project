@@ -91,6 +91,7 @@ export function useDdayEntries() {
       color,
       sort_order: nextOrder,
       estimated_minutes,
+      is_archived: false,
       created_at: new Date().toISOString(),
     };
     setEntries((prev) => [...prev, optimistic]);
@@ -113,7 +114,7 @@ export function useDdayEntries() {
 
   async function updateEntry(
     id: string,
-    updates: Partial<Pick<DdayEntry, "estimated_minutes" | "title" | "date" | "emoji" | "color">>,
+    updates: Partial<Pick<DdayEntry, "estimated_minutes" | "title" | "date" | "emoji" | "color" | "is_archived">>,
   ) {
     if (!user) return;
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
@@ -133,5 +134,13 @@ export function useDdayEntries() {
     }
   }
 
-  return { entries, loading, addEntry, updateEntry, removeEntry };
+  async function archiveEntry(id: string) {
+    return updateEntry(id, { is_archived: true });
+  }
+
+  async function restoreEntry(id: string) {
+    return updateEntry(id, { is_archived: false });
+  }
+
+  return { entries, loading, addEntry, updateEntry, removeEntry, archiveEntry, restoreEntry };
 }

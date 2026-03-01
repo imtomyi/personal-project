@@ -5,6 +5,11 @@ export function filterRealTodos(todos: Todo[]): Todo[] {
   return todos.filter((t) => t.description !== SECTION_HEADER_MARKER);
 }
 
+// ============================================
+// 스케줄 블록 색상
+// ============================================
+export type ScheduleBlockColor = "blue" | "indigo" | "amber" | "violet" | "emerald" | "sky" | "gray" | "rose";
+
 export type Profile = {
   id: string;
   email: string;
@@ -49,6 +54,7 @@ export type Todo = {
   assigned_to: string | null;
   created_by: string | null;
   due_date: string | null;
+  due_time: string | null; // "HH:MM" 선호 시간, e.g. "14:30"
   duration_days: number;
   sort_order: number;
   parent_id: string | null;
@@ -264,6 +270,7 @@ export type DdayEntry = {
   color: string;
   sort_order: number;
   estimated_minutes: number; // 시간표 배치용 소요 시간 (기본 30분)
+  is_archived: boolean;
   created_at: string;
 };
 
