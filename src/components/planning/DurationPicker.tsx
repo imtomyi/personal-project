@@ -70,8 +70,8 @@ export default function DurationPicker({ value, dueDate, onChange, compact }: Du
   }, [value]);
 
   // Calculate popover position (absolute — scrolls with page)
-  useEffect(() => {
-    if (!open || !buttonRef.current) return;
+  const updatePopoverPos = useCallback(() => {
+    if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const popoverWidth = 288;
     const popoverHeight = 280;
@@ -85,7 +85,17 @@ export default function DurationPicker({ value, dueDate, onChange, compact }: Du
       ? rect.top + window.scrollY - popoverHeight - 4
       : rect.bottom + window.scrollY + 4;
     setPopoverPos({ top, left });
-  }, [open]);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePopoverPos();
+    // resize만 추적, scroll은 추적하지 않아 페이지와 함께 자연스럽게 스크롤됨
+    window.addEventListener("resize", updatePopoverPos);
+    return () => {
+      window.removeEventListener("resize", updatePopoverPos);
+    };
+  }, [open, updatePopoverPos]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

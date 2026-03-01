@@ -175,7 +175,8 @@ export default function WorkspaceDetailPage() {
   }
 
   // ── 활성/완료 할 일 분리 (아카이브 용) ──
-  const activeTodos = useMemo(() => todos.filter((t) => !t.is_completed || t.description === SECTION_HEADER_MARKER), [todos]);
+  // 하위 작업(parent_id)은 부모 아래에 표시되므로 항상 activeTodos에 포함
+  const activeTodos = useMemo(() => todos.filter((t) => !t.is_completed || t.description === SECTION_HEADER_MARKER || !!t.parent_id), [todos]);
   const completedTodos = useMemo(
     () => todos.filter((t) => t.is_completed && t.description !== SECTION_HEADER_MARKER && !t.parent_id)
       .sort((a, b) => {
