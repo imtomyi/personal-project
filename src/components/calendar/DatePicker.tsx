@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { todayKST } from "@/lib/date";
 import { WEEKDAY_LABELS } from "@/lib/constants";
+import { getHolidayName } from "@/lib/holidays";
 
 type DatePickerProps = {
   value: string;            // "YYYY-MM-DD" or ""
@@ -289,18 +290,23 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
             const isToday = dateStr === todayStr;
             const isSelected = dateStr === selectedStr;
             const dayOfWeek = new Date(dateStr + "T00:00:00").getDay();
+            const holidayName = getHolidayName(dateStr);
+            const isRed = dayOfWeek === 0 || !!holidayName;
 
             return (
               <button
                 key={dateStr}
                 type="button"
                 onClick={() => selectDate(cell.day)}
+                title={holidayName || undefined}
                 className={`flex h-7 w-full items-center justify-center rounded-lg text-[11px] font-medium transition-all
                   ${isSelected
                     ? "bg-blue-500 text-white shadow-sm shadow-blue-500/30"
                     : isToday
-                      ? "bg-blue-50 font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                      : dayOfWeek === 0
+                      ? isRed
+                        ? "bg-red-50 font-bold text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                        : "bg-blue-50 font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                      : isRed
                         ? "text-red-400 hover:bg-gray-100 dark:text-red-500 dark:hover:bg-gray-700"
                         : dayOfWeek === 6
                           ? "text-blue-400 hover:bg-gray-100 dark:text-blue-500 dark:hover:bg-gray-700"
@@ -425,18 +431,23 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
               const isToday = dateStr === todayStr;
               const isSelected = dateStr === selectedStr;
               const dayOfWeek = new Date(dateStr + "T00:00:00").getDay();
+              const holidayName = getHolidayName(dateStr);
+              const isRed = dayOfWeek === 0 || !!holidayName;
 
               return (
                 <button
                   key={dateStr}
                   type="button"
                   onClick={() => selectDate(cell.day)}
+                  title={holidayName || undefined}
                   className={`flex h-8 w-full items-center justify-center rounded-lg text-xs font-medium transition-all
                     ${isSelected
                       ? "bg-blue-500 text-white shadow-sm shadow-blue-500/30"
                       : isToday
-                        ? "bg-blue-50 font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-                        : dayOfWeek === 0
+                        ? isRed
+                          ? "bg-red-50 font-bold text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                          : "bg-blue-50 font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                        : isRed
                           ? "text-red-400 hover:bg-gray-100 dark:text-red-500 dark:hover:bg-gray-700"
                           : dayOfWeek === 6
                             ? "text-blue-400 hover:bg-gray-100 dark:text-blue-500 dark:hover:bg-gray-700"
