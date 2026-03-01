@@ -110,10 +110,9 @@ export default function TimePicker({
   useEffect(() => {
     if (!open) return;
     updatePos();
-    window.addEventListener("scroll", updatePos, { capture: true });
+    // resize만 추적, scroll은 추적하지 않아 페이지와 함께 자연스럽게 스크롤됨
     window.addEventListener("resize", updatePos);
     return () => {
-      window.removeEventListener("scroll", updatePos, { capture: true });
       window.removeEventListener("resize", updatePos);
     };
   }, [open, updatePos]);

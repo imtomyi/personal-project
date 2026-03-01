@@ -155,10 +155,9 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
   useEffect(() => {
     if (open && inline) {
       updatePortalPos();
-      window.addEventListener("scroll", updatePortalPos, true);
+      // resize만 추적, scroll은 추적하지 않아 페이지와 함께 자연스럽게 스크롤됨
       window.addEventListener("resize", updatePortalPos);
       return () => {
-        window.removeEventListener("scroll", updatePortalPos, true);
         window.removeEventListener("resize", updatePortalPos);
       };
     }
