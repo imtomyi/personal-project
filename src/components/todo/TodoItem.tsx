@@ -8,6 +8,7 @@ import { SECTION_HEADER_MARKER } from "@/lib/types";
 import { parseLocalDate, nowKST, fmtDateKST, toDateStr, getDurationInDays } from "@/lib/date";
 import DurationPicker from "@/components/planning/DurationPicker";
 import DatePicker from "@/components/calendar/DatePicker";
+import TimePicker from "@/components/planning/TimePicker";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 
 type TodoItemProps = {
@@ -428,28 +429,36 @@ function TodoItem({
                   </span>
                 )}
 
-                {/* 날짜 배지: 시작일 → 마감일 */}
+                {/* 날짜 배지: 클릭하면 DatePicker 열림 */}
                 {todo.due_date && (
-                  <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${
-                    todo.is_completed
-                      ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
-                      : isOverdue
-                        ? "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"
-                        : urgency
-                          ? `${urgency.bgColor} ${urgency.textColor}`
-                          : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
-                  }`}>
-                    <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    {fmtDateKST(todo.due_date)}
-                    {todo.due_time && (
-                      <span className="opacity-70">{todo.due_time}</span>
+                  <DatePicker
+                    value={todo.due_date ? toDateStr(parseLocalDate(todo.due_date)) : ""}
+                    onChange={(date) => handleDateChange({ target: { value: date } } as React.ChangeEvent<HTMLInputElement>)}
+                    onClear={() => handleDateChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)}
+                    inline
+                    renderTrigger={() => (
+                      <span className={`inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] transition-colors hover:ring-2 hover:ring-blue-300/50 ${
+                        todo.is_completed
+                          ? "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                          : isOverdue
+                            ? "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400"
+                            : urgency
+                              ? `${urgency.bgColor} ${urgency.textColor}`
+                              : "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400"
+                      }`}>
+                        <svg className="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {fmtDateKST(todo.due_date!)}
+                        {todo.due_time && (
+                          <span className="opacity-70">{todo.due_time}</span>
+                        )}
+                        {deadlineStr && deadlineStr !== todo.due_date && (
+                          <span className="opacity-70">→ {fmtDateKST(deadlineStr)}</span>
+                        )}
+                      </span>
                     )}
-                    {deadlineStr && deadlineStr !== todo.due_date && (
-                      <span className="opacity-70">→ {fmtDateKST(deadlineStr)}</span>
-                    )}
-                  </span>
+                  />
                 )}
 
                 {/* Duration badge - always visible, clickable */}
@@ -478,12 +487,11 @@ function TodoItem({
                   inline
                 />
                 {/* Time picker (mobile) */}
-                <input
-                  type="time"
+                <TimePicker
                   value={todo.due_time || ""}
-                  onChange={(e) => onUpdate(todo.id, { due_time: e.target.value || null })}
-                  className="h-7 w-[80px] rounded-lg border border-gray-200 bg-gray-50 px-1.5 text-[11px] text-gray-600 outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                  title="선호 시간"
+                  onChange={(time) => onUpdate(todo.id, { due_time: time || null })}
+                  onClear={() => onUpdate(todo.id, { due_time: null })}
+                  compact
                 />
                 {/* Star toggle (mobile) */}
                 <button
@@ -532,12 +540,11 @@ function TodoItem({
             onClear={() => handleDateChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)}
             inline
           />
-          <input
-            type="time"
+          <TimePicker
             value={todo.due_time || ""}
-            onChange={(e) => onUpdate(todo.id, { due_time: e.target.value || null })}
-            className="w-[72px] rounded border border-gray-200 bg-transparent px-1 py-0.5 text-xs text-gray-500 outline-none dark:border-gray-600 dark:text-gray-400"
-            title="선호 시간"
+            onChange={(time) => onUpdate(todo.id, { due_time: time || null })}
+            onClear={() => onUpdate(todo.id, { due_time: null })}
+            compact
           />
           <button
             onClick={handleToggleStar}

@@ -17,12 +17,12 @@ import { useAllWorkspaceTodos, getWorkspaceColorByKey } from "@/hooks/useAllWork
 import type { WorkspaceTodo } from "@/hooks/useAllWorkspaceTodos";
 import { useCanvasCalendar } from "@/hooks/useCanvasCalendar";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
-import { parseLocalDate, todayKST, toDateStr, getDurationInDays } from "@/lib/date";
+import { parseLocalDate, todayKST, toDateStr, getDurationInDays, parseNaturalDate } from "@/lib/date";
 import { useWsWidgetConfig } from "@/hooks/useWsWidgetConfig";
 import type { WsWidgetId } from "@/lib/workspace-widgets";
-import Header from "@/components/Header";
-import WorkspaceList from "@/components/WorkspaceList";
-import WorkspaceCalendar from "@/components/WorkspaceCalendar";
+import Header from "@/components/layout/Header";
+import WorkspaceList from "@/components/workspace/WorkspaceList";
+import WorkspaceCalendar from "@/components/calendar/WorkspaceCalendar";
 import ExerciseWidget from "@/components/widgets/ExerciseWidget";
 import DdayWidget from "@/components/widgets/DdayWidget";
 import HabitWidget from "@/components/widgets/HabitWidget";
@@ -30,22 +30,27 @@ import GoalWidget from "@/components/widgets/GoalWidget";
 import WsWidgetPicker from "@/components/widgets/WsWidgetPicker";
 import SortableWsWidget from "@/components/widgets/SortableWsWidget";
 import { useDdayEntries } from "@/hooks/useDdayEntries";
-import RoutineManager from "@/components/RoutineManager";
-import OverdueTasksAlert from "@/components/OverdueTasksAlert";
-import DailySchedule from "@/components/DailySchedule";
-import DailyPlanTriage from "@/components/DailyPlanTriage";
+import RoutineManager from "@/components/planning/RoutineManager";
+import PomodoroTimer from "@/components/planning/PomodoroTimer";
+import { createClient } from "@/lib/supabase";
+import OverdueTasksAlert from "@/components/todo/OverdueTasksAlert";
+import DailySchedule from "@/components/planning/DailySchedule";
+import DailyPlanTriage from "@/components/planning/DailyPlanTriage";
 import { useDailyPlan } from "@/hooks/useDailyPlan";
 import { useCarryOverPlans } from "@/hooks/useCarryOverPlans";
 import { useRecurringTasks } from "@/hooks/useRecurringTasks";
 import { useHabits } from "@/hooks/useHabits";
 import { useToast } from "@/context/ToastContext";
 import { sortTodosBySchedulePriority, estimateMinutes } from "@/lib/autoScheduler";
+import { DURATION_PRESETS, DEFAULT_DURATION_HOURS } from "@/lib/constants";
+import DatePicker from "@/components/calendar/DatePicker";
+import TimePicker from "@/components/planning/TimePicker";
 import type { Todo } from "@/lib/types";
 
 export default function WorkspacesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo, archiveWorkspace } = useAllWorkspaceTodos();
+  const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo, archiveWorkspace, addWorkspaceLocally } = useAllWorkspaceTodos();
   const { canvasTodos, canvasCourses, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
   const { entries: ddayEntries, updateEntry: updateDdayEntry } = useDdayEntries();
   const { showToast } = useToast();
@@ -78,6 +83,8 @@ export default function WorkspacesPage() {
   const activeWorkspaces = useMemo(() => workspaces.filter((w) => !w.is_archived), [workspaces]);
   const archivedWorkspaces = useMemo(() => workspaces.filter((w) => w.is_archived), [workspaces]);
   const [showArchived, setShowArchived] = useState(false);
+  // 다가오는 할 일 카드 완료 애니메이션
+  const [exitingUpcomingIds, setExitingUpcomingIds] = useState<Set<string>>(new Set());
 
   // ── 워크스페이스 맵 (시간표 블록에 워크스페이스 이름 표시용) ──
   const workspaceMap = useMemo(() => {
@@ -118,7 +125,8 @@ export default function WorkspacesPage() {
         t.description !== SECTION_HEADER_MARKER &&
         t.due_date &&
         t.due_date <= todayStr &&
-        !scheduledIds.has(t.id),
+        !scheduledIds.has(t.id) &&
+        !t.recurring_task_id, // 반복일정에서 자동 생성된 할일은 제외 (이미 recurring 블록으로 표시됨)
     );
     if (unplanned.length === 0) {
       try { localStorage.setItem(key, todayStr); } catch { /* ignore */ }
@@ -449,6 +457,10 @@ export default function WorkspacesPage() {
   const [quickTitle, setQuickTitle] = useState("");
   const [quickWsId, setQuickWsId] = useState("");
   const [quickAdding, setQuickAdding] = useState(false);
+  const [quickExpanded, setQuickExpanded] = useState(false);
+  const [quickDueDate, setQuickDueDate] = useState(todayKST());
+  const [quickDuration, setQuickDuration] = useState(DEFAULT_DURATION_HOURS);
+  const [quickDueTime, setQuickDueTime] = useState("");
 
   // Set default workspace when workspaces load
   useEffect(() => {
@@ -462,8 +474,15 @@ export default function WorkspacesPage() {
     if (!quickTitle.trim() || !quickWsId) return;
     setQuickAdding(true);
     try {
-      await addAllTodo(quickWsId, quickTitle.trim());
+      const { cleaned, date: parsedDate } = parseNaturalDate(quickTitle.trim());
+      const finalTitle = parsedDate ? cleaned : quickTitle.trim();
+      const finalDueDate = parsedDate ?? quickDueDate;
+      await addAllTodo(quickWsId, finalTitle, finalDueDate, quickDuration, quickDueTime || undefined);
       setQuickTitle("");
+      setQuickDueDate(todayKST());
+      setQuickDuration(DEFAULT_DURATION_HOURS);
+      setQuickDueTime("");
+      setQuickExpanded(false);
     } catch (err) {
       console.error("Quick add failed:", err);
     }
@@ -504,7 +523,7 @@ export default function WorkspacesPage() {
 
       {/* 워크스페이스 서브 헤더 */}
       <div className="border-b border-[#5856D6]/[0.08] bg-gradient-to-r from-[#5856D6]/[0.03] via-white/80 to-white/80 backdrop-blur-xl backdrop-saturate-[1.8] dark:border-[#5856D6]/[0.15] dark:from-[#5856D6]/[0.08] dark:via-[#111827]/80 dark:to-[#111827]/80">
-        <div className="mx-auto max-w-[1400px] px-4 sm:px-8">
+        <div className="mx-auto max-w-[1400px] overflow-x-clip px-4 sm:px-8">
           <div className="flex items-center gap-3 py-3 sm:gap-4">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#5856D6] shadow-[0_2px_8px_rgba(88,86,214,0.25)]">
@@ -549,7 +568,7 @@ export default function WorkspacesPage() {
             </div>
           </div>
           {/* 빠른 요약 바 */}
-          <div className="-mx-5 flex items-center gap-1 overflow-x-auto px-5 pb-2.5 sm:-mx-8 sm:px-8">
+          <div className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-2.5 sm:-mx-8 sm:px-8">
             {wsStats.length > 0 && wsStats.map((ws) => (
               <Link
                 key={ws.id}
@@ -585,36 +604,100 @@ export default function WorkspacesPage() {
         {/* 빠른 할 일 추가 */}
         {workspaces.length > 0 && (
           <form onSubmit={handleQuickAdd} className="mb-6">
-            <div className="flex items-center gap-2 rounded-2xl border border-black/[0.06] bg-white px-3 py-2.5 shadow-sm dark:border-white/[0.08] dark:bg-[#1c1c1e]">
-              <select
-                value={quickWsId}
-                onChange={(e) => setQuickWsId(e.target.value)}
-                className="max-w-[120px] truncate rounded-lg border-0 bg-black/[0.04] px-2 py-1.5 text-[12px] font-medium text-foreground outline-none sm:max-w-[160px] dark:bg-white/[0.08] dark:text-white"
-              >
-                {activeWorkspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                value={quickTitle}
-                onChange={(e) => setQuickTitle(e.target.value)}
-                id="quick-add-input"
-                placeholder="할 일 추가..."
-                className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground placeholder-secondary/60 outline-none dark:text-white"
-                disabled={quickAdding}
-              />
-              <button
-                type="submit"
-                disabled={!quickTitle.trim() || quickAdding}
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#5856D6] text-white transition-all hover:bg-[#4a48c4] disabled:opacity-30"
-              >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+            <div className={`rounded-2xl border border-black/[0.06] bg-white shadow-sm transition-all dark:border-white/[0.08] dark:bg-[#1c1c1e] ${quickExpanded ? "ring-2 ring-[#5856D6]/20" : ""}`}>
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                <select
+                  value={quickWsId}
+                  onChange={(e) => setQuickWsId(e.target.value)}
+                  className="max-w-[120px] truncate rounded-lg border-0 bg-black/[0.04] px-2 py-1.5 text-[12px] font-medium text-foreground outline-none sm:max-w-[160px] dark:bg-white/[0.08] dark:text-white"
+                >
+                  {activeWorkspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={quickTitle}
+                  onChange={(e) => setQuickTitle(e.target.value)}
+                  onFocus={() => setQuickExpanded(true)}
+                  id="quick-add-input"
+                  autoComplete="off"
+                  placeholder="할 일 추가..."
+                  className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground placeholder-secondary/60 outline-none dark:text-white"
+                  disabled={quickAdding}
+                />
+                {quickExpanded && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickExpanded(false);
+                      setQuickDueDate(todayKST());
+                      setQuickDuration(DEFAULT_DURATION_HOURS);
+                      setQuickDueTime("");
+                    }}
+                    className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg text-secondary transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.08]"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={!quickTitle.trim() || quickAdding}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-[#5856D6] text-white transition-all hover:bg-[#4a48c4] disabled:opacity-30"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
+              {/* 확장 패널: 날짜 + 기간 */}
+              {quickExpanded && (
+                <div className="border-t border-black/[0.04] px-3 pb-3 pt-2.5 dark:border-white/[0.06]">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {/* 시작일 */}
+                    <div className="flex items-center gap-1.5">
+                      <DatePicker value={quickDueDate} onChange={setQuickDueDate} disabled={quickAdding} inline />
+                    </div>
+                    {/* 기간 pill */}
+                    <div className="flex items-center gap-1.5">
+                      <svg className="h-3.5 w-3.5 flex-shrink-0 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div className="flex flex-wrap gap-1">
+                        {DURATION_PRESETS.map((preset) => (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            onClick={() => setQuickDuration(preset.value)}
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium transition-all ${
+                              quickDuration === preset.value
+                                ? "bg-[#5856D6] text-white shadow-sm"
+                                : "text-secondary hover:bg-black/[0.04] dark:hover:bg-white/[0.08]"
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* 선호 시간 */}
+                    <div className="flex items-center gap-1.5">
+                      <TimePicker
+                        value={quickDueTime}
+                        onChange={setQuickDueTime}
+                        onClear={() => setQuickDueTime("")}
+                        disabled={quickAdding}
+                        compact
+                        placeholder="시간"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </form>
         )}
@@ -626,37 +709,60 @@ export default function WorkspacesPage() {
               다가오는 할 일
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {upcomingTodos.map((item) => {
+              {upcomingTodos.filter(item => !exitingUpcomingIds.has(item.id) || true).map((item) => {
                 const color = upcomingColorMap.get(item.workspace_id);
+                const isExiting = exitingUpcomingIds.has(item.id);
                 return (
-                  <Link
+                  <div
                     key={item.id}
-                    href={item.source === "canvas" ? "/khu" : `/workspace/${item.workspace_id}`}
-                    className="group flex items-start gap-3 rounded-2xl bg-[#f5f5f7] px-4 py-3.5 transition-all hover:bg-[#ededf0] active:scale-[0.98] dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
+                    className={`group relative flex items-start gap-3 rounded-2xl bg-[#f5f5f7] px-4 py-3.5 transition-all dark:bg-white/[0.06] ${isExiting ? "scale-95 opacity-0 duration-300" : "hover:bg-[#ededf0] active:scale-[0.98] dark:hover:bg-white/[0.1]"}`}
                   >
-                    <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[13px] font-semibold ${color?.bg ?? "bg-blue-100 dark:bg-blue-900/30"} ${color?.text ?? "text-blue-600 dark:text-blue-400"}`}>
-                      {item.source === "canvas" ? "📚" : item.workspace_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-medium text-foreground dark:text-white">
-                        {item.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          item._daysLeft < 0
-                            ? "bg-red-500/10 text-red-600 dark:text-red-400"
-                            : item._daysLeft <= 1
-                              ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
-                              : item._daysLeft <= 3
-                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                : "bg-black/[0.04] text-secondary dark:bg-white/[0.06]"
-                        }`}>
-                          {item._dueLabel}
-                        </span>
-                        <span className="truncate text-[11px] text-[#aeaeb2]">{item.workspace_name}</span>
+                    {/* 체크 버튼 */}
+                    {item.source !== "canvas" && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setExitingUpcomingIds(prev => new Set(prev).add(item.id));
+                          setTimeout(() => {
+                            updateAllTodo(item.id, { is_completed: true, status: "done" });
+                          }, 300);
+                        }}
+                        className="mt-1 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 border-gray-300 transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-gray-600 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20"
+                      >
+                        <svg className="h-3 w-3 text-transparent group-hover:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    )}
+                    <Link
+                      href={item.source === "canvas" ? "/khu" : `/workspace/${item.workspace_id}`}
+                      className="flex min-w-0 flex-1 items-start gap-3"
+                    >
+                      <div className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[13px] font-semibold ${color?.bg ?? "bg-blue-100 dark:bg-blue-900/30"} ${color?.text ?? "text-blue-600 dark:text-blue-400"}`}>
+                        {item.source === "canvas" ? "📚" : item.workspace_name.charAt(0).toUpperCase()}
                       </div>
-                    </div>
-                  </Link>
+                      <div className="min-w-0 flex-1">
+                        <p className={`truncate text-[14px] font-medium text-foreground dark:text-white ${isExiting ? "line-through" : ""}`}>
+                          {item.title}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            item._daysLeft < 0
+                              ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                              : item._daysLeft <= 1
+                                ? "bg-orange-500/10 text-orange-600 dark:text-orange-400"
+                                : item._daysLeft <= 3
+                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  : "bg-black/[0.04] text-secondary dark:bg-white/[0.06]"
+                          }`}>
+                            {item._dueLabel}
+                          </span>
+                          <span className="truncate text-[11px] text-[#aeaeb2]">{item.workspace_name}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
                 );
               })}
             </div>
@@ -781,6 +887,7 @@ export default function WorkspacesPage() {
                   wsNextTodo={wsNextTodo}
                   onArchive={archiveWorkspace}
                   filterWorkspaces={activeWorkspaces}
+                  onWorkspaceCreated={addWorkspaceLocally}
                 />
               </div>
 
@@ -851,7 +958,7 @@ export default function WorkspacesPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-1 xl:grid-cols-2">
                   {visibleWidgets.map((w) => (
-                    <div key={w.id}>{renderWidget(w.id)}</div>
+                    <div key={w.id} className="min-w-0">{renderWidget(w.id)}</div>
                   ))}
                 </div>
               )}
@@ -987,6 +1094,23 @@ export default function WorkspacesPage() {
       {showRoutineManager && (
         <RoutineManager onClose={() => setShowRoutineManager(false)} />
       )}
+
+      <PomodoroTimer
+        todos={todos.filter((t) => !t.is_completed && t.description !== "__section_header__").map((t) => ({ id: t.id, title: t.title }))}
+        onWorkSessionComplete={async (todoId: string, durationSec: number) => {
+          if (!user) return;
+          const todo = todos.find((t) => t.id === todoId);
+          const supabase = createClient();
+          await supabase.from("time_entries").insert({
+            user_id: user.id,
+            todo_id: todoId,
+            workspace_id: todo?.workspace_id ?? "",
+            started_at: new Date(Date.now() - durationSec * 1000).toISOString(),
+            ended_at: new Date().toISOString(),
+            duration_sec: durationSec,
+          });
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan, DdayEntry } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan, DdayEntry, ScheduleBlockColor } from "@/lib/types";
 import { ASSIGNMENT_EFFORT_HOURS } from "@/lib/constants";
-import { toDateStr, parseLocalDate } from "@/lib/date";
+import { toDateStr, parseLocalDate, timeToMinutes } from "@/lib/date";
 
 // ============================================
 // Types
@@ -14,7 +14,7 @@ export type ScheduleBlock = {
   startMin: number; // minutes from midnight (e.g., 540 = 9:00)
   endMin: number;
   type: ScheduleBlockType;
-  color?: string;
+  color?: ScheduleBlockColor;
   todoId?: string;
   planId?: string; // daily_plans.id → 드래그 시 업데이트 대상 식별
   recurringTaskId?: string;
@@ -31,20 +31,6 @@ type ScheduleOptions = {
   habits?: Habit[]; // 시간 설정된 습관 → 시간표 블록
 };
 
-// ============================================
-// Utilities
-// ============================================
-
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
 
 const SCHEDULE_START = 6 * 60; // 06:00
 const SCHEDULE_END = 24 * 60; // 24:00
@@ -87,7 +73,7 @@ function getFocusScore(minuteOfDay: number): number {
 // Free Slots Helper
 // ============================================
 
-export function findFreeSlots(
+function findFreeSlots(
   existingBlocks: ScheduleBlock[],
 ): { start: number; end: number }[] {
   const occupiedSlots = existingBlocks
@@ -114,7 +100,7 @@ export function findFreeSlots(
  * 빈 슬롯을 집중 가능 시간대 점수 기준으로 정렬.
  * 같은 점수대면 시간순 유지.
  */
-export function findFreeSlotsRanked(
+function findFreeSlotsRanked(
   existingBlocks: ScheduleBlock[],
 ): { start: number; end: number }[] {
   const raw = findFreeSlots(existingBlocks);
@@ -151,7 +137,7 @@ export function findFreeSlotsRanked(
 // 1. Canvas 수업 블록 생성
 // ============================================
 
-export function generateClassBlocks(
+function generateClassBlocks(
   classEvents: CanvasCalendarEvent[],
   dateStr: string,
   courseNames: Map<string, string>,
@@ -201,10 +187,12 @@ type StudyPlan = {
   assignmentType: AssignmentType;
 };
 
-export function computeStudyPlans(
+function computeStudyPlans(
   assignments: Assignment[],
   todayStr: string,
 ): StudyPlan[] {
+  if (!assignments || assignments.length === 0) return [];
+
   const todayMs = parseLocalDate(todayStr).getTime();
 
   return assignments
@@ -242,7 +230,7 @@ export function computeStudyPlans(
 // 3. 공부 블록 자동 배치
 // ============================================
 
-export function generateStudyBlocks(
+function generateStudyBlocks(
   studyPlans: StudyPlan[],
   existingBlocks: ScheduleBlock[],
 ): ScheduleBlock[] {
@@ -300,37 +288,52 @@ export function generateStudyBlocks(
 // 4a. 습관 → 시간표 블록
 // ============================================
 
-function generateHabitBlocks(habits: Habit[], dayOfWeek: number): ScheduleBlock[] {
-  return habits
-    .filter((h) => {
-      if (!h.is_active || !h.time_start) return false;
-      // days_of_week가 있으면 그걸로 매칭, 없으면 frequency 기반
-      if (h.days_of_week && h.days_of_week.length > 0) {
-        return h.days_of_week.includes(dayOfWeek);
-      }
-      switch (h.frequency) {
-        case "daily":
-          return true;
-        case "weekdays":
-          return dayOfWeek >= 1 && dayOfWeek <= 5;
-        case "weekly":
-          return dayOfWeek === 1; // 기본: 월요일
-        default:
-          return false;
-      }
-    })
-    .map((h) => {
-      const startMin = timeToMinutes(h.time_start!);
+/** 오늘 해당하는 습관인지 (요일 매칭) */
+function isHabitForToday(h: Habit, dayOfWeek: number): boolean {
+  if (!h.is_active) return false;
+  if (h.days_of_week && h.days_of_week.length > 0) {
+    return h.days_of_week.includes(dayOfWeek);
+  }
+  // days_of_week 미설정 시 frequency 기반, frequency도 없으면 매일(daily) 기본
+  switch (h.frequency) {
+    case "weekdays":
+      return dayOfWeek >= 1 && dayOfWeek <= 5;
+    case "weekly":
+      return dayOfWeek === 1; // 기본: 월요일
+    case "daily":
+    default:
+      return true; // frequency 미설정 또는 "daily" → 매일
+  }
+}
+
+const DEFAULT_HABIT_DURATION = 30; // 시간 미설정 습관 기본 30분
+
+function generateHabitBlocks(
+  habits: Habit[],
+  dayOfWeek: number,
+): { fixed: ScheduleBlock[]; unscheduled: Habit[] } {
+  const todayHabits = habits.filter((h) => isHabitForToday(h, dayOfWeek));
+  const fixed: ScheduleBlock[] = [];
+  const unscheduled: Habit[] = [];
+
+  for (const h of todayHabits) {
+    if (h.time_start) {
+      const startMin = timeToMinutes(h.time_start);
       const endMin = h.time_end ? timeToMinutes(h.time_end) : startMin + 60;
-      return {
+      fixed.push({
         id: `habit-${h.id}`,
         title: `${h.emoji} ${h.name}`,
         startMin,
         endMin,
         type: "habit" as const,
         color: "violet",
-      };
-    });
+      });
+    } else {
+      unscheduled.push(h);
+    }
+  }
+
+  return { fixed, unscheduled };
 }
 
 // ============================================
@@ -343,60 +346,88 @@ export function generateSchedule(
   dayOfWeek: number, // 0=Sun..6=Sat
   options?: ScheduleOptions,
 ): ScheduleBlock[] {
-  const blocks: ScheduleBlock[] = [];
+  try {
+    const blocks: ScheduleBlock[] = [];
 
-  // 1. 반복 일정 배치 (고정)
-  const todayRecurring = recurringTasks.filter((t) => {
-    if (!t.is_active || !t.time_start) return false;
-    switch (t.recurrence) {
-      case "daily":
-        return true;
-      case "weekdays":
-        return dayOfWeek >= 1 && dayOfWeek <= 5;
-      case "weekly":
-      case "custom":
-        return t.days_of_week.includes(dayOfWeek);
-      default:
-        return false;
-    }
-  });
-
-  for (const rt of todayRecurring) {
-    if (!rt.time_start) continue;
-    const startMin = timeToMinutes(rt.time_start);
-    const endMin = rt.time_end ? timeToMinutes(rt.time_end) : startMin + 60;
-
-    blocks.push({
-      id: `recurring-${rt.id}`,
-      title: rt.title,
-      startMin,
-      endMin,
-      type: "recurring",
-      color: "blue",
-      recurringTaskId: rt.id,
+    // 1. 반복 일정 배치 (고정)
+    const todayRecurring = (recurringTasks || []).filter((t) => {
+      if (!t.is_active || !t.time_start) return false;
+      switch (t.recurrence) {
+        case "daily":
+          return true;
+        case "weekdays":
+          return dayOfWeek >= 1 && dayOfWeek <= 5;
+        case "weekly":
+        case "custom":
+          return t.days_of_week.includes(dayOfWeek);
+        default:
+          return false;
+      }
     });
+
+    for (const rt of todayRecurring) {
+      if (!rt.time_start) continue;
+      const startMin = timeToMinutes(rt.time_start);
+      const endMin = rt.time_end ? timeToMinutes(rt.time_end) : startMin + 60;
+
+      blocks.push({
+        id: `recurring-${rt.id}`,
+        title: rt.title,
+        startMin,
+        endMin,
+        type: "recurring",
+        color: "blue",
+        recurringTaskId: rt.id,
+      });
+    }
+
+    // 2. 습관 블록 배치 (고정 시간)
+    let unscheduledHabits: Habit[] = [];
+    if (options?.habits) {
+      const { fixed, unscheduled } = generateHabitBlocks(options.habits, dayOfWeek);
+      blocks.push(...fixed);
+      unscheduledHabits = unscheduled;
+    }
+
+    // 3. Canvas 수업 블록 배치 (고정)
+    if (options?.classEvents && options.dateStr && options.courseNames) {
+      const classBlocks = generateClassBlocks(
+        options.classEvents,
+        options.dateStr,
+        options.courseNames,
+      );
+      blocks.push(...classBlocks);
+    }
+
+    // 4. 시간 미설정 습관 → 빈 슬롯에 자동 배치
+    if (unscheduledHabits.length > 0) {
+      const freeSlots = findFreeSlots(blocks);
+      for (const h of unscheduledHabits) {
+        for (const slot of freeSlots) {
+          if (slot.end - slot.start >= DEFAULT_HABIT_DURATION) {
+            blocks.push({
+              id: `habit-${h.id}`,
+              title: `${h.emoji} ${h.name}`,
+              startMin: slot.start,
+              endMin: slot.start + DEFAULT_HABIT_DURATION,
+              type: "habit" as const,
+              color: "violet",
+            });
+            slot.start += DEFAULT_HABIT_DURATION;
+            break;
+          }
+        }
+      }
+    }
+
+    // Sort blocks by start time
+    blocks.sort((a, b) => a.startMin - b.startMin);
+
+    return blocks;
+  } catch (error) {
+    console.error("[Schedule] generateSchedule error:", error);
+    return [];
   }
-
-  // 2. 습관 블록 배치 (고정)
-  if (options?.habits) {
-    const habitBlocks = generateHabitBlocks(options.habits, dayOfWeek);
-    blocks.push(...habitBlocks);
-  }
-
-  // 3. Canvas 수업 블록 배치 (고정)
-  if (options?.classEvents && options.dateStr && options.courseNames) {
-    const classBlocks = generateClassBlocks(
-      options.classEvents,
-      options.dateStr,
-      options.courseNames,
-    );
-    blocks.push(...classBlocks);
-  }
-
-  // Sort blocks by start time
-  blocks.sort((a, b) => a.startMin - b.startMin);
-
-  return blocks;
 }
 
 // ============================================
@@ -407,32 +438,37 @@ export function placeDdayBlocks(
   existingBlocks: ScheduleBlock[],
   ddayEntries: DdayEntry[],
 ): ScheduleBlock[] {
-  if (!ddayEntries || ddayEntries.length === 0) return existingBlocks;
+  try {
+    if (!ddayEntries || ddayEntries.length === 0) return existingBlocks || [];
 
-  const allBlocks = [...existingBlocks];
+    const allBlocks = [...(existingBlocks || [])];
 
-  for (const entry of ddayEntries) {
-    allBlocks.sort((a, b) => a.startMin - b.startMin);
-    const rankedSlots = findFreeSlotsRanked(allBlocks);
+    for (const entry of ddayEntries) {
+      allBlocks.sort((a, b) => a.startMin - b.startMin);
+      const rankedSlots = findFreeSlotsRanked(allBlocks);
 
-    for (const slot of rankedSlots) {
-      if (slot.end - slot.start >= entry.estimated_minutes) {
-        allBlocks.push({
-          id: `dday-${entry.id}`,
-          title: `${entry.emoji} ${entry.title}`,
-          startMin: slot.start,
-          endMin: slot.start + entry.estimated_minutes,
-          type: "dday",
-          color: entry.color,
-          ddayEntryId: entry.id,
-        });
-        break;
+      for (const slot of rankedSlots) {
+        if (slot.end - slot.start >= entry.estimated_minutes) {
+          allBlocks.push({
+            id: `dday-${entry.id}`,
+            title: `${entry.emoji} ${entry.title}`,
+            startMin: slot.start,
+            endMin: slot.start + entry.estimated_minutes,
+            type: "dday",
+            color: entry.color as ScheduleBlockColor,
+            ddayEntryId: entry.id,
+          });
+          break;
+        }
       }
     }
-  }
 
-  allBlocks.sort((a, b) => a.startMin - b.startMin);
-  return allBlocks;
+    allBlocks.sort((a, b) => a.startMin - b.startMin);
+    return allBlocks;
+  } catch (error) {
+    console.error("[Schedule] placeDdayBlocks error:", error);
+    return existingBlocks || [];
+  }
 }
 
 // ============================================
@@ -446,58 +482,63 @@ export function autoAssignTodos(
   assignments?: Assignment[],
   dateStr?: string,
 ): ScheduleBlock[] {
-  const SLOT_DURATION = 60;
-  const allBlocks = [...existingBlocks];
+  try {
+    const SLOT_DURATION = 60;
+    const allBlocks = [...(existingBlocks || [])];
 
-  // Phase 1: 공부 블록 배치 (마감일 기반)
-  if (assignments && dateStr) {
-    const studyPlans = computeStudyPlans(assignments, dateStr);
-    const studyBlocks = generateStudyBlocks(studyPlans, allBlocks);
-    allBlocks.push(...studyBlocks);
-    allBlocks.sort((a, b) => a.startMin - b.startMin);
-  }
-
-  // Phase 2: 남은 빈 시간에 일반 할일 배치 (집중 시간대 우선)
-  const uncompletedTodos = todos
-    .filter(
-      (t) =>
-        !t.is_completed &&
-        t.description !== "__section_header__" &&
-        !t.parent_id,
-    )
-    .sort((a, b) => {
-      const pa = a.priority ?? 5;
-      const pb = b.priority ?? 5;
-      if (pa !== pb) return pa - pb;
-      if (a.due_date && b.due_date)
-        return a.due_date.localeCompare(b.due_date);
-      if (a.due_date) return -1;
-      if (b.due_date) return 1;
-      return 0;
-    });
-
-  for (const todo of uncompletedTodos) {
-    allBlocks.sort((a, b) => a.startMin - b.startMin);
-    const rankedSlots = findFreeSlotsRanked(allBlocks);
-    let placed = false;
-    for (const slot of rankedSlots) {
-      if (slot.end - slot.start < SLOT_DURATION) continue;
-      allBlocks.push({
-        id: `todo-${todo.id}`,
-        title: todo.title,
-        startMin: slot.start,
-        endMin: slot.start + SLOT_DURATION,
-        type: "todo",
-        todoId: todo.id,
-      });
-      placed = true;
-      break;
+    // Phase 1: 공부 블록 배치 (마감일 기반)
+    if (assignments && dateStr) {
+      const studyPlans = computeStudyPlans(assignments, dateStr);
+      const studyBlocks = generateStudyBlocks(studyPlans, allBlocks);
+      allBlocks.push(...studyBlocks);
+      allBlocks.sort((a, b) => a.startMin - b.startMin);
     }
-    if (!placed) break; // 더 이상 빈 공간 없음
-  }
 
-  allBlocks.sort((a, b) => a.startMin - b.startMin);
-  return allBlocks;
+    // Phase 2: 남은 빈 시간에 일반 할일 배치 (집중 시간대 우선)
+    const uncompletedTodos = (todos || [])
+      .filter(
+        (t) =>
+          !t.is_completed &&
+          t.description !== "__section_header__" &&
+          !t.parent_id,
+      )
+      .sort((a, b) => {
+        const pa = a.priority ?? 5;
+        const pb = b.priority ?? 5;
+        if (pa !== pb) return pa - pb;
+        if (a.due_date && b.due_date)
+          return a.due_date.localeCompare(b.due_date);
+        if (a.due_date) return -1;
+        if (b.due_date) return 1;
+        return 0;
+      });
+
+    for (const todo of uncompletedTodos) {
+      allBlocks.sort((a, b) => a.startMin - b.startMin);
+      const rankedSlots = findFreeSlotsRanked(allBlocks);
+      let placed = false;
+      for (const slot of rankedSlots) {
+        if (slot.end - slot.start < SLOT_DURATION) continue;
+        allBlocks.push({
+          id: `todo-${todo.id}`,
+          title: todo.title,
+          startMin: slot.start,
+          endMin: slot.start + SLOT_DURATION,
+          type: "todo",
+          todoId: todo.id,
+        });
+        placed = true;
+        break;
+      }
+      if (!placed) break; // 더 이상 빈 공간 없음
+    }
+
+    allBlocks.sort((a, b) => a.startMin - b.startMin);
+    return allBlocks;
+  } catch (error) {
+    console.error("[Schedule] autoAssignTodos error:", error);
+    return existingBlocks || [];
+  }
 }
 
 // ============================================
@@ -512,82 +553,142 @@ export function autoAssignDailyPlans(
   blocks: ScheduleBlock[];
   scheduleUpdates: { id: string; startMin: number; endMin: number }[];
 } {
-  const allBlocks = [...existingBlocks];
-  const scheduleUpdates: { id: string; startMin: number; endMin: number }[] = [];
+  try {
+    const allBlocks = [...(existingBlocks || [])];
+    const scheduleUpdates: { id: string; startMin: number; endMin: number }[] = [];
 
-  // 이미 배치된 계획 (scheduled_start_min 이 있는 것)
-  const alreadyScheduled = dailyPlans.filter(
-    (p) =>
-      !p.is_skipped &&
-      p.estimated_minutes > 0 &&
-      p.scheduled_start_min != null &&
-      p.scheduled_end_min != null,
-  );
+    // 이미 recurring 블록으로 표시된 반복일정 ID 수집 — 중복 블록 방지
+    const existingRecurringIds = new Set(
+      (existingBlocks || [])
+        .filter((b) => b.type === "recurring" && b.recurringTaskId)
+        .map((b) => b.recurringTaskId!),
+    );
 
-  // 아직 미배치인 계획
-  const unscheduled = dailyPlans.filter(
-    (p) =>
-      !p.is_skipped &&
-      p.estimated_minutes > 0 &&
-      p.scheduled_start_min == null,
-  );
-
-  // 이미 배치된 블록 먼저 추가
-  for (const plan of alreadyScheduled) {
-    const todo = todos.find((t) => t.id === plan.todo_id);
-    if (!todo) continue;
-    allBlocks.push({
-      id: `plan-${plan.id}`,
-      title: todo.title,
-      startMin: plan.scheduled_start_min!,
-      endMin: plan.scheduled_end_min!,
-      type: "todo",
-      todoId: todo.id,
-      planId: plan.id,
-    });
-  }
-
-  // 미배치 계획을 집중 가능 시간대 우선으로 배치
-  if (unscheduled.length > 0) {
-    for (const plan of unscheduled.sort((a, b) => a.sort_order - b.sort_order)) {
-      const todo = todos.find((t) => t.id === plan.todo_id);
-      if (!todo) continue;
-
-      const neededMin = plan.estimated_minutes;
-
-      // 현재 블록 기준으로 집중 점수 높은 빈 슬롯 탐색
-      allBlocks.sort((a, b) => a.startMin - b.startMin);
-      const rankedSlots = findFreeSlotsRanked(allBlocks);
-
-      let placed = false;
-      for (const slot of rankedSlots) {
-        const availableMin = slot.end - slot.start;
-        if (availableMin < neededMin) continue;
-
-        const startMin = slot.start;
-        const endMin = startMin + neededMin;
-
-        allBlocks.push({
-          id: `plan-${plan.id}`,
-          title: todo.title,
-          startMin,
-          endMin,
-          type: "todo",
-          todoId: todo.id,
-          planId: plan.id,
-        });
-
-        scheduleUpdates.push({ id: plan.id, startMin, endMin });
-        placed = true;
-        break;
+    // 반복일정에서 자동 생성된 할일은 제외 (이미 recurring 블록으로 표시됨)
+    const filteredPlans = (dailyPlans || []).filter((p) => {
+      const todo = (todos || []).find((t) => t.id === p.todo_id);
+      if (todo?.recurring_task_id && existingRecurringIds.has(todo.recurring_task_id)) {
+        return false;
       }
+      return true;
+    });
 
-      if (!placed) break; // 더 이상 빈 공간 없음
+    // 이미 배치된 계획 (scheduled_start_min 이 있는 것)
+    const alreadyScheduled = filteredPlans.filter(
+      (p) =>
+        !p.is_skipped &&
+        p.estimated_minutes > 0 &&
+        p.scheduled_start_min != null &&
+        p.scheduled_end_min != null,
+    );
+
+    // 아직 미배치인 계획
+    const unscheduled = filteredPlans.filter(
+      (p) =>
+        !p.is_skipped &&
+        p.estimated_minutes > 0 &&
+        p.scheduled_start_min == null,
+    );
+
+    // 이미 배치된 블록 먼저 추가
+    for (const plan of alreadyScheduled) {
+      const todo = (todos || []).find((t) => t.id === plan.todo_id);
+      if (!todo) continue;
+      allBlocks.push({
+        id: `plan-${plan.id}`,
+        title: todo.title,
+        startMin: plan.scheduled_start_min!,
+        endMin: plan.scheduled_end_min!,
+        type: "todo",
+        todoId: todo.id,
+        planId: plan.id,
+      });
     }
-  }
 
-  allBlocks.sort((a, b) => a.startMin - b.startMin);
-  return { blocks: allBlocks, scheduleUpdates };
+    // 미배치 계획을 집중 가능 시간대 우선으로 배치
+    // 선호 시간이 있는 할 일을 먼저 배치 (선점 보장)
+    if (unscheduled.length > 0) {
+      const sorted = [...unscheduled].sort((a, b) => {
+        const todoA = (todos || []).find((t) => t.id === a.todo_id);
+        const todoB = (todos || []).find((t) => t.id === b.todo_id);
+        const hasTimeA = todoA?.due_time ? 0 : 1;
+        const hasTimeB = todoB?.due_time ? 0 : 1;
+        if (hasTimeA !== hasTimeB) return hasTimeA - hasTimeB;
+        return a.sort_order - b.sort_order;
+      });
+
+      for (const plan of sorted) {
+        const todo = (todos || []).find((t) => t.id === plan.todo_id);
+        if (!todo) continue;
+
+        const neededMin = plan.estimated_minutes;
+        let placed = false;
+
+        // 선호 시간이 있으면 해당 시간에 우선 배치 시도
+        if (todo.due_time) {
+          const preferredStart = timeToMinutes(todo.due_time);
+          const preferredEnd = preferredStart + neededMin;
+
+          if (preferredEnd <= SCHEDULE_END && preferredStart >= SCHEDULE_START) {
+            allBlocks.sort((a, b) => a.startMin - b.startMin);
+            const freeSlots = findFreeSlots(allBlocks);
+            const fits = freeSlots.some(
+              (slot) => slot.start <= preferredStart && slot.end >= preferredEnd,
+            );
+            if (fits) {
+              allBlocks.push({
+                id: `plan-${plan.id}`,
+                title: todo.title,
+                startMin: preferredStart,
+                endMin: preferredEnd,
+                type: "todo",
+                todoId: todo.id,
+                planId: plan.id,
+              });
+              scheduleUpdates.push({ id: plan.id, startMin: preferredStart, endMin: preferredEnd });
+              placed = true;
+            }
+          }
+        }
+
+        // 폴백: 집중 점수 높은 빈 슬롯 탐색 (기존 로직)
+        if (!placed) {
+          allBlocks.sort((a, b) => a.startMin - b.startMin);
+          const rankedSlots = findFreeSlotsRanked(allBlocks);
+
+          for (const slot of rankedSlots) {
+            const availableMin = slot.end - slot.start;
+            if (availableMin < neededMin) continue;
+
+            const startMin = slot.start;
+            const endMin = startMin + neededMin;
+
+            allBlocks.push({
+              id: `plan-${plan.id}`,
+              title: todo.title,
+              startMin,
+              endMin,
+              type: "todo",
+              todoId: todo.id,
+              planId: plan.id,
+            });
+
+            scheduleUpdates.push({ id: plan.id, startMin, endMin });
+            placed = true;
+            break;
+          }
+        }
+
+        if (!placed) break; // 더 이상 빈 공간 없음
+      }
+    }
+
+    allBlocks.sort((a, b) => a.startMin - b.startMin);
+    return { blocks: allBlocks, scheduleUpdates };
+  } catch (error) {
+    console.error("[Schedule] autoAssignDailyPlans error:", error);
+    return { blocks: existingBlocks || [], scheduleUpdates: [] };
+  }
 }
 
 // ============================================
@@ -633,4 +734,3 @@ export function estimateMinutes(todo: Todo): number {
   return 45;
 }
 
-export { minutesToTime, timeToMinutes };

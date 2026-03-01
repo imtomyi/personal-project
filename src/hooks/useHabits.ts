@@ -78,7 +78,7 @@ export function useHabits() {
 
     const { data } = await supabase
       .from("habit_logs")
-      .select("*")
+      .select("id, habit_id, date")
       .eq("user_id", user.id)
       .gte("date", since);
     setLogs(data ?? []);
@@ -92,7 +92,7 @@ export function useHabits() {
     channelName: user ? `habits:${user.id}` : "habits:noop",
     table: "habits",
     filter: user ? `user_id=eq.${user.id}` : undefined,
-    onChanged: fetchAll,
+    onChanged: fetchHabits,
     skip: !user,
   });
 
@@ -107,7 +107,7 @@ export function useHabits() {
   async function addHabit(
     name: string,
     emoji: string = "✅",
-    options?: { time_start?: string; time_end?: string; days_of_week?: number[] },
+    options?: { time_start?: string; time_end?: string; days_of_week?: number[]; frequency?: "daily" | "weekdays" | "weekly" },
   ) {
     if (!user) return;
     const nextOrder = habits.length > 0 ? Math.max(...habits.map((h) => h.sort_order)) + 1 : 0;
@@ -117,6 +117,7 @@ export function useHabits() {
       name,
       emoji,
       sort_order: nextOrder,
+      frequency: options?.frequency || "daily",
       time_start: options?.time_start || null,
       time_end: options?.time_end || null,
       days_of_week: options?.days_of_week || null,
@@ -215,8 +216,8 @@ export function useHabits() {
     return streak;
   }
 
-  // 시간표 연동용: 시간이 설정된 활성 습관만
-  const habitsWithTime = habits.filter((h) => h.is_active && h.time_start);
+  // 시간표 연동용: 활성 습관 전체 (시간 미설정 시 자동 배치)
+  const habitsWithTime = habits.filter((h) => h.is_active);
 
   return {
     habits,

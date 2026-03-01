@@ -40,11 +40,6 @@ export function getWorkspaceColorByKey(key: string): ColorEntry {
   return WORKSPACE_COLOR_MAP[key as WorkspaceColorKey] ?? WORKSPACE_COLOR_MAP.blue;
 }
 
-/** @deprecated — 하위 호환용. 새 코드는 getWorkspaceColorByKey 사용 */
-export function getWorkspaceColor(index: number) {
-  return getWorkspaceColorByKey(WORKSPACE_COLOR_KEYS[index % WORKSPACE_COLOR_KEYS.length]);
-}
-
 export function useAllWorkspaceTodos() {
   const [todos, setTodos] = useState<WorkspaceTodo[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -121,6 +116,7 @@ export function useAllWorkspaceTodos() {
             assigned_to: null,
             created_by: a.user_id,
             due_date: a.due_date,
+            due_time: null,
             duration_days: 24, // 기본 1일
             sort_order: a.sort_order,
             parent_id: null,
@@ -149,12 +145,18 @@ export function useAllWorkspaceTodos() {
   });
 
   useRealtimeSubscription({
+    channelName: "all-workspaces-realtime",
+    table: "workspaces",
+    onChanged: fetchAll,
+  });
+
+  useRealtimeSubscription({
     channelName: "all-assignments-realtime",
     table: "assignments",
     onChanged: fetchAll,
   });
 
-  const addTodo = useCallback(async (workspaceId: string, title: string) => {
+  const addTodo = useCallback(async (workspaceId: string, title: string, dueDate?: string, durationHours?: number, dueTime?: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const wsTodos = todos.filter((t) => t.workspace_id === workspaceId);
@@ -163,14 +165,15 @@ export function useAllWorkspaceTodos() {
       workspace_id: workspaceId,
       title,
       created_by: user.id,
-      due_date: todayKST(),
-      duration_days: 24,
+      due_date: dueDate || todayKST(),
+      due_time: dueTime || null,
+      duration_days: durationHours || 24,
       sort_order: nextOrder,
     });
     // realtime subscription will trigger fetchAll automatically
   }, [supabase, todos]);
 
-  const updateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "due_date" | "duration_days" | "is_completed" | "status">>) => {
+  const updateTodo = useCallback(async (id: string, updates: Partial<Pick<Todo, "due_date" | "due_time" | "duration_days" | "is_completed" | "status">>) => {
     // Optimistic update
     setTodos((prev) => prev.map((t) => t.id === id ? { ...t, ...updates } : t));
     const { error } = await supabase.from("todos").update(updates).eq("id", id);
@@ -194,5 +197,10 @@ export function useAllWorkspaceTodos() {
     }
   }, [supabase, fetchAll]);
 
-  return { todos, workspaces, loading, addTodo, updateTodo, archiveWorkspace };
+  /** 낙관적 워크스페이스 추가 — CreateWorkspace에서 즉시 반영용 */
+  const addWorkspaceLocally = useCallback((ws: Workspace) => {
+    setWorkspaces((prev) => [ws, ...prev]);
+  }, []);
+
+  return { todos, workspaces, loading, addTodo, updateTodo, archiveWorkspace, addWorkspaceLocally };
 }

@@ -92,6 +92,9 @@ export function useRoutines(workspaceId?: string) {
           time_start: data.time_start ?? undefined,
           time_end: data.time_end ?? undefined,
           days_of_week: data.days_of_week.length > 0 ? data.days_of_week : undefined,
+          frequency: (data.recurrence === "daily" || data.recurrence === "weekdays" || data.recurrence === "weekly")
+            ? data.recurrence
+            : "daily",
         });
       } else {
         await addRecurringTask({
