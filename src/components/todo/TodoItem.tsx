@@ -479,13 +479,6 @@ function TodoItem({
 
               {/* Mobile quick actions - tap row */}
               <div className="mt-2 flex items-center gap-1.5 md:hidden">
-                {/* Date picker (mobile) */}
-                <DatePicker
-                  value={todo.due_date ? toDateStr(parseLocalDate(todo.due_date)) : ""}
-                  onChange={(date) => handleDateChange({ target: { value: date } } as React.ChangeEvent<HTMLInputElement>)}
-                  onClear={() => handleDateChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)}
-                  inline
-                />
                 {/* Time picker (mobile) */}
                 <TimePicker
                   value={todo.due_time || ""}
@@ -534,12 +527,6 @@ function TodoItem({
 
         {/* Actions - desktop: hover reveal, mobile: hidden (use swipe or tap) */}
         <div className="hidden flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:flex">
-          <DatePicker
-            value={todo.due_date ? toDateStr(parseLocalDate(todo.due_date)) : ""}
-            onChange={(date) => handleDateChange({ target: { value: date } } as React.ChangeEvent<HTMLInputElement>)}
-            onClear={() => handleDateChange({ target: { value: "" } } as React.ChangeEvent<HTMLInputElement>)}
-            inline
-          />
           <TimePicker
             value={todo.due_time || ""}
             onChange={(time) => onUpdate(todo.id, { due_time: time || null })}
