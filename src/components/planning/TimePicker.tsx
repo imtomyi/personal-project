@@ -91,30 +91,29 @@ export default function TimePicker({
     }, 0);
   }, [open]);
 
-  // Position popup
+  // Position popup (absolute — scrolls with page)
   const updatePos = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const popupW = 240;
     const popupH = 280;
-    let left = rect.left;
-    if (left + popupW > window.innerWidth - 12) left = window.innerWidth - popupW - 12;
+    let left = rect.left + window.scrollX;
+    if (rect.left + popupW > window.innerWidth - 12) left = window.innerWidth - popupW - 12 + window.scrollX;
     if (left < 12) left = 12;
     const spaceBelow = window.innerHeight - rect.bottom;
     const top = spaceBelow < popupH + 8
-      ? rect.top - popupH - 4
-      : rect.bottom + 4;
+      ? rect.top + window.scrollY - popupH - 4
+      : rect.bottom + window.scrollY + 4;
     setPortalPos({ top, left });
   }, []);
 
   useEffect(() => {
     if (!open) return;
     updatePos();
-    const onScroll = () => setOpen(false);
-    window.addEventListener("scroll", onScroll, { capture: true });
+    window.addEventListener("scroll", updatePos, { capture: true });
     window.addEventListener("resize", updatePos);
     return () => {
-      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("scroll", updatePos, { capture: true });
       window.removeEventListener("resize", updatePos);
     };
   }, [open, updatePos]);
@@ -165,7 +164,7 @@ export default function TimePicker({
   const popup = open && portalPos ? createPortal(
     <div
       ref={portalRef}
-      className="fixed z-[9999] w-60 rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
+      className="absolute z-[9999] w-60 rounded-xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800"
       style={{ top: portalPos.top, left: portalPos.left }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}

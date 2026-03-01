@@ -10,20 +10,20 @@ import { useRealtimeTodos } from "@/hooks/useRealtimeTodos";
 import type { Workspace, Member, Todo } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import { nowKST, toDateStr, parseLocalDate } from "@/lib/date";
-import Header from "@/components/Header";
-import AddTodo from "@/components/AddTodo";
-import TodoList from "@/components/TodoList";
-import CalendarView from "@/components/CalendarView";
-import MemberList from "@/components/MemberList";
-import OnlineUsers from "@/components/OnlineUsers";
-import InviteModal from "@/components/InviteModal";
-import ApplyTemplateModal from "@/components/ApplyTemplateModal";
-import EisenhowerMatrix from "@/components/EisenhowerMatrix";
-import KanbanBoard from "@/components/KanbanBoard";
-import RoutineManager from "@/components/RoutineManager";
-import PomodoroTimer from "@/components/PomodoroTimer";
-import KeyboardShortcuts from "@/components/KeyboardShortcuts";
-import CommandPalette from "@/components/CommandPalette";
+import Header from "@/components/layout/Header";
+import AddTodo from "@/components/todo/AddTodo";
+import TodoList from "@/components/todo/TodoList";
+import CalendarView from "@/components/calendar/CalendarView";
+import MemberList from "@/components/workspace/MemberList";
+import OnlineUsers from "@/components/workspace/OnlineUsers";
+import InviteModal from "@/components/workspace/InviteModal";
+import ApplyTemplateModal from "@/components/planning/ApplyTemplateModal";
+import EisenhowerMatrix from "@/components/planning/EisenhowerMatrix";
+import KanbanBoard from "@/components/planning/KanbanBoard";
+import RoutineManager from "@/components/planning/RoutineManager";
+import PomodoroTimer from "@/components/planning/PomodoroTimer";
+import KeyboardShortcuts from "@/components/layout/KeyboardShortcuts";
+import CommandPalette from "@/components/layout/CommandPalette";
 import { useTheme } from "@/context/ThemeContext";
 import { useReminders } from "@/hooks/useReminders";
 import { useRecurringTasks } from "@/hooks/useRecurringTasks";
@@ -99,20 +99,27 @@ export default function WorkspaceDetailPage() {
     }
   }, [user, authLoading, router, fetchWorkspace, fetchMembers]);
 
-  async function handleAddTodo(title: string, description?: string, dueDate?: string, durationHours?: number, goalId?: string) {
+  async function handleAddTodo(title: string, description?: string, dueDate?: string, durationHours?: number, goalId?: string, dueTime?: string) {
     try {
-      await addTodo(title, description, dueDate, durationHours, goalId);
+      await addTodo(title, description, dueDate, durationHours, goalId, dueTime);
       showToast("할 일이 추가되었습니다");
     } catch {
       showToast("할 일 추가에 실패했습니다", "error");
     }
   }
 
-  async function handleUpdateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "duration_days" | "priority" | "status">>) {
+  async function handleUpdateTodo(id: string, updates: Partial<Pick<Todo, "title" | "description" | "is_completed" | "assigned_to" | "due_date" | "due_time" | "duration_days" | "priority" | "status">>) {
     try {
       await updateTodo(id, updates);
       if (updates.is_completed !== undefined) {
-        showToast(updates.is_completed ? "완료!" : "다시 열림");
+        if (updates.is_completed) {
+          showToast("✅ 완료", "success", {
+            label: "되돌리기",
+            onClick: () => updateTodo(id, { is_completed: false }),
+          });
+        } else {
+          showToast("다시 열림");
+        }
       }
     } catch {
       showToast("업데이트에 실패했습니다", "error");
@@ -166,6 +173,20 @@ export default function WorkspaceDetailPage() {
         break;
     }
   }
+
+  // ── 활성/완료 할 일 분리 (아카이브 용) ──
+  const activeTodos = useMemo(() => todos.filter((t) => !t.is_completed || t.description === SECTION_HEADER_MARKER), [todos]);
+  const completedTodos = useMemo(
+    () => todos.filter((t) => t.is_completed && t.description !== SECTION_HEADER_MARKER && !t.parent_id)
+      .sort((a, b) => {
+        // 최근 완료 순 (updated_at 기준)
+        const aDate = a.updated_at || a.created_at;
+        const bDate = b.updated_at || b.created_at;
+        return bDate.localeCompare(aDate);
+      }),
+    [todos],
+  );
+  const [showCompleted, setShowCompleted] = useState(false);
 
   // Quick stats
   const realTodos = todos.filter((t) => t.description !== SECTION_HEADER_MARKER);
@@ -378,7 +399,7 @@ export default function WorkspaceDetailPage() {
           <div>
             <AddTodo onAdd={handleAddTodo} goals={goals} />
             <TodoList
-              todos={todos}
+              todos={activeTodos}
               members={members}
               isTeam={members.length > 1}
               onUpdate={handleUpdateTodo}
@@ -386,6 +407,76 @@ export default function WorkspaceDetailPage() {
               onReorder={reorderTodos}
               onAddSubtask={addSubtask}
             />
+
+            {/* ── 완료된 할 일 아카이브 ── */}
+            {completedTodos.length > 0 && (
+              <div className="mt-6">
+                <button
+                  onClick={() => setShowCompleted(!showCompleted)}
+                  className="mb-3 flex w-full items-center gap-2 rounded-xl bg-emerald-500/[0.06] px-4 py-2.5 text-left transition-colors hover:bg-emerald-500/[0.1] dark:bg-emerald-500/[0.08] dark:hover:bg-emerald-500/[0.12]"
+                >
+                  <svg
+                    className={`h-3.5 w-3.5 text-emerald-600 transition-transform dark:text-emerald-400 ${showCompleted ? "rotate-90" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  <svg className="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                  </svg>
+                  <span className="text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+                    완료된 할 일 ({completedTodos.length})
+                  </span>
+                </button>
+
+                {showCompleted && (
+                  <div className="space-y-1 rounded-xl border border-black/[0.04] bg-white/60 p-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
+                    {completedTodos.map((todo) => (
+                      <div
+                        key={todo.id}
+                        className="group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                      >
+                        {/* Completed check */}
+                        <button
+                          onClick={() => handleUpdateTodo(todo.id, { is_completed: false })}
+                          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 transition-colors hover:bg-emerald-600"
+                          title="되돌리기"
+                        >
+                          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+
+                        {/* Title */}
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-gray-400 line-through dark:text-gray-500">
+                          {todo.title}
+                        </span>
+
+                        {/* Date */}
+                        {todo.due_date && (
+                          <span className="flex-shrink-0 text-[11px] text-gray-300 dark:text-gray-600">
+                            {todo.due_date.replace(/-/g, ".")}
+                          </span>
+                        )}
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => handleDeleteTodo(todo.id)}
+                          className="flex-shrink-0 rounded-md p-1 text-gray-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-400 group-hover:opacity-100 dark:text-gray-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                          title="삭제"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : view === "calendar" ? (
           <CalendarView

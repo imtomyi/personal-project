@@ -144,9 +144,9 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const popupW = 260; // w-64 = 16rem = 256px + padding
-    let left = rect.right - popupW;
+    let left = rect.right + window.scrollX - popupW;
     if (left < 8) left = 8;
-    if (left + popupW > window.innerWidth - 8) left = window.innerWidth - popupW - 8;
+    if (left + popupW > window.innerWidth + window.scrollX - 8) left = window.innerWidth + window.scrollX - popupW - 8;
     const spaceBelow = window.innerHeight - rect.bottom;
     const top = spaceBelow < 320 ? rect.top + window.scrollY - 320 : rect.bottom + window.scrollY + 4;
     setPortalPos({ top, left });
@@ -193,7 +193,7 @@ export default function DatePicker({ value, onChange, disabled, compact, inline,
         {open && portalPos && createPortal(
           <div
             ref={portalRef}
-            className="fixed z-[9999] w-64 rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+            className="absolute z-[9999] w-64 rounded-xl border border-gray-200 bg-white p-2.5 shadow-xl dark:border-gray-700 dark:bg-gray-800"
             style={{ top: portalPos.top, left: portalPos.left }}
             onMouseDown={(e) => e.stopPropagation()}
           >

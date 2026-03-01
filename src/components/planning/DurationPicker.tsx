@@ -69,30 +69,22 @@ export default function DurationPicker({ value, dueDate, onChange, compact }: Du
     setLocalValue(value);
   }, [value]);
 
-  // Calculate popover position based on button location
+  // Calculate popover position (absolute — scrolls with page)
   useEffect(() => {
     if (!open || !buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const popoverWidth = 288; // w-72 = 18rem = 288px
-    const popoverHeight = 280; // approximate popover height
-    let left = rect.left;
-    // Prevent right overflow
-    if (left + popoverWidth > window.innerWidth - 16) {
-      left = window.innerWidth - popoverWidth - 16;
+    const popoverWidth = 288;
+    const popoverHeight = 280;
+    let left = rect.left + window.scrollX;
+    if (rect.left + popoverWidth > window.innerWidth - 16) {
+      left = window.innerWidth - popoverWidth - 16 + window.scrollX;
     }
-    // Prevent left overflow
     if (left < 16) left = 16;
-    // Check if there's enough space below, otherwise show above
     const spaceBelow = window.innerHeight - rect.bottom;
     const top = spaceBelow < popoverHeight + 8
-      ? rect.top - popoverHeight - 4  // show above
-      : rect.bottom + 4;              // show below
+      ? rect.top + window.scrollY - popoverHeight - 4
+      : rect.bottom + window.scrollY + 4;
     setPopoverPos({ top, left });
-
-    // Close on scroll to prevent stale positioning
-    const handleScroll = () => setOpen(false);
-    window.addEventListener("scroll", handleScroll, { capture: true });
-    return () => window.removeEventListener("scroll", handleScroll, { capture: true });
   }, [open]);
 
   useEffect(() => {
@@ -218,7 +210,7 @@ export default function DurationPicker({ value, dueDate, onChange, compact }: Du
   const popoverContent = open ? createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[9999] w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+      className="absolute z-[9999] w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-600 dark:bg-gray-800"
       style={{ top: popoverPos.top, left: popoverPos.left }}
       onClick={(e) => e.stopPropagation()}
     >
