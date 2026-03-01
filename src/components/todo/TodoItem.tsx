@@ -198,14 +198,16 @@ function TodoItem({
     onUpdate(todo.id, { priority: val ? Number(val) : null });
   }, [onUpdate, todo.id]);
 
+  const isStarred = todo.priority != null && todo.priority <= 2;
+
+  const handleToggleStar = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onUpdate(todo.id, { priority: isStarred ? null : 1 });
+  }, [onUpdate, todo.id, isStarred]);
+
   const priorityBorderClass = useMemo(() => {
-    switch (todo.priority) {
-      case 1: return "border-l-4 border-l-red-500";
-      case 2: return "border-l-4 border-l-orange-400";
-      case 3: return "border-l-4 border-l-blue-400";
-      case 4: return "border-l-4 border-l-gray-300";
-      default: return "";
-    }
+    if (todo.priority != null && todo.priority <= 2) return "border-l-4 border-l-amber-400";
+    return "";
   }, [todo.priority]);
 
   // Memoized date/urgency computations
@@ -405,6 +407,7 @@ function TodoItem({
                     : "text-gray-900 dark:text-white"
                 }`}
               >
+                {isStarred && <span className="mr-1 text-amber-500">★</span>}
                 {todo.title}
               </p>
               {todo.description && (
@@ -482,19 +485,21 @@ function TodoItem({
                   className="h-7 w-[80px] rounded-lg border border-gray-200 bg-gray-50 px-1.5 text-[11px] text-gray-600 outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
                   title="선호 시간"
                 />
-                {/* Priority (mobile) */}
-                <select
-                  value={todo.priority ?? ""}
-                  onChange={handlePriorityChange}
-                  className="h-7 rounded-lg border border-gray-200 bg-gray-50 px-1.5 text-[11px] text-gray-600 outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
-                  title="우선순위"
+                {/* Star toggle (mobile) */}
+                <button
+                  onClick={handleToggleStar}
+                  className={`flex h-7 items-center gap-1 rounded-lg border px-2 text-[11px] font-medium transition-colors ${
+                    isStarred
+                      ? "border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-500"
+                  }`}
+                  title="중요 표시"
                 >
-                  <option value="">우선순위</option>
-                  <option value="1">P1 긴급</option>
-                  <option value="2">P2 높음</option>
-                  <option value="3">P3 보통</option>
-                  <option value="4">P4 낮음</option>
-                </select>
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill={isStarred ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  {isStarred ? "중요" : ""}
+                </button>
                 <div className="flex-1" />
                 {/* Edit (mobile) */}
                 <button
@@ -534,18 +539,19 @@ function TodoItem({
             className="w-[72px] rounded border border-gray-200 bg-transparent px-1 py-0.5 text-xs text-gray-500 outline-none dark:border-gray-600 dark:text-gray-400"
             title="선호 시간"
           />
-          <select
-            value={todo.priority ?? ""}
-            onChange={handlePriorityChange}
-            className="rounded border border-gray-200 bg-transparent px-1 py-0.5 text-xs text-gray-500 outline-none dark:border-gray-600 dark:text-gray-400"
-            title="우선순위"
+          <button
+            onClick={handleToggleStar}
+            className={`rounded p-1 transition-colors ${
+              isStarred
+                ? "text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30"
+                : "text-gray-300 hover:bg-gray-100 hover:text-amber-400 dark:text-gray-600 dark:hover:bg-gray-700"
+            }`}
+            title={isStarred ? "중요 해제" : "중요 표시"}
           >
-            <option value="">-</option>
-            <option value="1">P1</option>
-            <option value="2">P2</option>
-            <option value="3">P3</option>
-            <option value="4">P4</option>
-          </select>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill={isStarred ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+          </button>
           {isTeam && (
             <select
               value={todo.assigned_to || ""}
