@@ -549,13 +549,16 @@ export function autoAssignDailyPlans(
   existingBlocks: ScheduleBlock[],
   dailyPlans: DailyPlan[],
   todos: Todo[],
+  targetDate?: string,
 ): {
   blocks: ScheduleBlock[];
   scheduleUpdates: { id: string; startMin: number; endMin: number }[];
+  stalePlanIds: string[];
 } {
   try {
     const allBlocks = [...(existingBlocks || [])];
     const scheduleUpdates: { id: string; startMin: number; endMin: number }[] = [];
+    const stalePlanIds: string[] = [];
 
     // 이미 recurring 블록으로 표시된 반복일정 ID 수집 — 중복 블록 방지
     const existingRecurringIds = new Set(
@@ -565,11 +568,33 @@ export function autoAssignDailyPlans(
     );
 
     // 반복일정에서 자동 생성된 할일은 제외 (이미 recurring 블록으로 표시됨)
+    // + 날짜 불일치/완료된 할일의 stale plan 감지
     const filteredPlans = (dailyPlans || []).filter((p) => {
       const todo = (todos || []).find((t) => t.id === p.todo_id);
-      if (todo?.recurring_task_id && existingRecurringIds.has(todo.recurring_task_id)) {
+
+      // todo가 삭제됨 → stale
+      if (!todo) {
+        stalePlanIds.push(p.id);
         return false;
       }
+
+      // todo가 이미 완료됨 → 스케줄에서 제외
+      if (todo.is_completed) {
+        stalePlanIds.push(p.id);
+        return false;
+      }
+
+      // todo의 due_date가 다른 날로 변경됨 → stale
+      if (targetDate && todo.due_date && todo.due_date !== targetDate) {
+        stalePlanIds.push(p.id);
+        return false;
+      }
+
+      // recurring 블록과 중복 방지
+      if (todo.recurring_task_id && existingRecurringIds.has(todo.recurring_task_id)) {
+        return false;
+      }
+
       return true;
     });
 
@@ -684,10 +709,10 @@ export function autoAssignDailyPlans(
     }
 
     allBlocks.sort((a, b) => a.startMin - b.startMin);
-    return { blocks: allBlocks, scheduleUpdates };
+    return { blocks: allBlocks, scheduleUpdates, stalePlanIds };
   } catch (error) {
     console.error("[Schedule] autoAssignDailyPlans error:", error);
-    return { blocks: existingBlocks || [], scheduleUpdates: [] };
+    return { blocks: existingBlocks || [], scheduleUpdates: [], stalePlanIds: [] };
   }
 }
 

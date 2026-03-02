@@ -256,6 +256,12 @@ export default function WorkspacesPage() {
     showToast("시간대가 변경되었습니다");
   }, [updateDailySchedule, showToast]);
 
+  // ── stale plan 자동 정리 (날짜 변경/완료/삭제된 todo의 daily_plan 제거) ──
+  const handleCleanupStalePlans = useCallback(async (planIds: string[]) => {
+    if (planIds.length === 0) return;
+    await Promise.all(planIds.map((id) => removePlan(id)));
+  }, [removePlan]);
+
   // ── 지연된 할 일 (전체 워크스페이스 통합) ──
   const overdueTodos = useMemo(() => {
     if (todosLoading) return [];
@@ -881,6 +887,7 @@ export default function WorkspacesPage() {
               onPostponeTodos={handlePostponeTodos}
               onRemoveFromSchedule={handleRemoveFromSchedule}
               onRescheduleBlock={handleRescheduleBlock}
+              onCleanupStalePlans={handleCleanupStalePlans}
             />
           </div>
 

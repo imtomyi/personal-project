@@ -40,6 +40,7 @@ type DailyScheduleProps = {
   onPostponeTodos?: (todoIds: string[]) => Promise<void>;
   onRemoveFromSchedule?: (planId: string, block: ScheduleBlock) => void;
   onRescheduleBlock?: (planId: string, startMin: number, endMin: number) => void;
+  onCleanupStalePlans?: (planIds: string[]) => void;
 };
 
 // ============================================
@@ -274,6 +275,7 @@ export default function DailySchedule({
   onPostponeTodos,
   onRemoveFromSchedule,
   onRescheduleBlock,
+  onCleanupStalePlans,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
@@ -407,8 +409,8 @@ export default function DailySchedule({
   // 일일 계획 자동 배치 결과
   const dailyPlanResult = useMemo(() => {
     if (!hasActivePlans || !dailyPlans) return null;
-    return autoAssignDailyPlans(baseBlocks, dailyPlans, todos);
-  }, [baseBlocks, dailyPlans, todos, hasActivePlans]);
+    return autoAssignDailyPlans(baseBlocks, dailyPlans, todos, today);
+  }, [baseBlocks, dailyPlans, todos, hasActivePlans, today]);
 
   // 자동 배치 후 DB에 저장 (한 번만)
   const batchUpdate = useCallback(async () => {
@@ -430,6 +432,16 @@ export default function DailySchedule({
   useEffect(() => {
     hasPersisted.current = false;
   }, [dailyPlans]);
+
+  // stale plan 자동 정리: 날짜 변경/완료/삭제된 todo의 daily_plan 제거
+  const cleanedUpRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!dailyPlanResult || dailyPlanResult.stalePlanIds.length === 0 || !onCleanupStalePlans) return;
+    const newStaleIds = dailyPlanResult.stalePlanIds.filter((id) => !cleanedUpRef.current.has(id));
+    if (newStaleIds.length === 0) return;
+    for (const id of newStaleIds) cleanedUpRef.current.add(id);
+    onCleanupStalePlans(newStaleIds);
+  }, [dailyPlanResult, onCleanupStalePlans]);
 
   const blocks = useMemo(() => {
     let result: ScheduleBlock[];

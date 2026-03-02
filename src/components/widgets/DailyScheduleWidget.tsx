@@ -103,7 +103,7 @@ export default function DailyScheduleWidget() {
     });
 
     if (activePlans.length > 0) {
-      const { blocks: planBlocks } = autoAssignDailyPlans(base, activePlans, []);
+      const { blocks: planBlocks } = autoAssignDailyPlans(base, activePlans, [], today);
       return planBlocks;
     }
 
