@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Logo from "@/components/layout/Logo";
 
 export const metadata: Metadata = {
   title: "개인정보처리방침 - KHUDO",
@@ -10,8 +11,8 @@ export default function PrivacyPage() {
     <div className="min-h-screen bg-[var(--background)]">
       <header className="border-b border-gray-200/60 dark:border-white/[0.08]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
-          <Link href="/" className="text-lg font-bold text-gray-900 dark:text-white">
-            KHUDO
+          <Link href="/">
+            <Logo size="md" />
           </Link>
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
             홈으로

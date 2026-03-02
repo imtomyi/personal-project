@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import Logo from "@/components/layout/Logo";
 
 function LoginContent() {
   const searchParams = useSearchParams();
@@ -60,9 +61,7 @@ function LoginContent() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            KHUDO
-          </h1>
+          <Logo size="xl" className="justify-center" />
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             실시간 협업 생산성 앱
           </p>

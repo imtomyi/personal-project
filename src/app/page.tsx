@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import Logo from "@/components/layout/Logo";
 
 const features = [
   {
@@ -67,7 +68,7 @@ export default function Home() {
         }`}
       >
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
-          <span className="text-lg font-bold tracking-tight">KHUDO</span>
+          <Logo size="md" />
           <div className="flex items-center gap-2">
             <Link
               href="/login"

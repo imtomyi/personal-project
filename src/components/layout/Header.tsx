@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import NotificationBell from "@/components/layout/NotificationBell";
+import Logo from "@/components/layout/Logo";
 
 const NAV_ITEMS = [
   { href: "/workspace", label: "워크스페이스", icon: "📋" },
@@ -21,11 +22,8 @@ export default function Header() {
     <header className="sticky top-0 z-50 border-b border-black/[0.06] bg-white/72 backdrop-blur-xl backdrop-saturate-[1.8] dark:border-white/[0.08] dark:bg-black/72">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 md:px-5">
         <div className="flex min-w-0 items-center gap-2 md:gap-3">
-          <Link
-            href="/workspace"
-            className="mr-0.5 flex-shrink-0 text-[15px] font-semibold tracking-tight text-foreground md:mr-1 md:text-lg dark:text-white"
-          >
-            KHUDO
+          <Link href="/workspace" className="mr-0.5 flex-shrink-0 md:mr-1">
+            <Logo size="sm" />
           </Link>
 
           {user && (
