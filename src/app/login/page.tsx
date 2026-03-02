@@ -61,7 +61,7 @@ function LoginContent() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <Logo size="xl" className="justify-center" />
+          <Link href="/"><Logo size="xl" className="justify-center" /></Link>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
             실시간 협업 생산성 앱
           </p>

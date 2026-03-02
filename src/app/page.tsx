@@ -68,7 +68,7 @@ export default function Home() {
         }`}
       >
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-5">
-          <Logo size="md" />
+          <Link href="/"><Logo size="md" /></Link>
           <div className="flex items-center gap-2">
             <Link
               href="/login"
