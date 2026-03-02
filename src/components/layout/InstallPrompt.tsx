@@ -54,9 +54,9 @@ export default function InstallPrompt() {
           <div className="flex items-start gap-3 p-4">
             {/* App icon */}
             <img
-              src="/icon-192.png"
+              src="/lion-logo.png"
               alt="KHUDO"
-              className="h-12 w-12 flex-shrink-0 rounded-xl"
+              className="h-12 w-12 flex-shrink-0 object-contain"
             />
 
             <div className="min-w-0 flex-1">

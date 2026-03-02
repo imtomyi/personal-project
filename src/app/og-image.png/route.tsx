@@ -1,8 +1,14 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function GET() {
+  // 사자 로고 이미지를 base64로 읽기
+  const lionBuffer = await readFile(join(process.cwd(), "public", "lion-logo.png"));
+  const lionBase64 = `data:image/png;base64,${lionBuffer.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -25,15 +31,26 @@ export async function GET() {
             gap: "16px",
           }}
         >
+          {/* 사자 + KHUDO 로고 */}
           <div
             style={{
-              fontSize: "72px",
-              fontWeight: 800,
-              color: "#5856D6",
-              letterSpacing: "-0.03em",
+              display: "flex",
+              alignItems: "center",
+              gap: "20px",
             }}
           >
-            KHUDO
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={lionBase64}
+              alt=""
+              width={80}
+              height={80}
+              style={{ objectFit: "contain" }}
+            />
+            <div style={{ display: "flex", fontSize: "72px", fontWeight: 800, letterSpacing: "-0.03em" }}>
+              <span style={{ color: "#C41230" }}>KHU</span>
+              <span style={{ color: "#5856D6" }}>DO</span>
+            </div>
           </div>
           <div
             style={{

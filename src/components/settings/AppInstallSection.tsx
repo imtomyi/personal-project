@@ -48,12 +48,12 @@ export default function AppInstallSection() {
         <div>
           <div className="mb-4 flex items-center gap-3">
             <img
-              src="/icon-192.png"
+              src="/lion-logo.png"
               alt="KHUDO"
               width={48}
               height={48}
-              className="flex-shrink-0 rounded-xl shadow-md"
-              style={{ width: 48, height: 48 }}
+              className="flex-shrink-0"
+              style={{ width: 48, height: 48, objectFit: "contain" }}
             />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">KHUDO</p>
