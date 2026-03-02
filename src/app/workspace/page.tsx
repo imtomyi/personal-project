@@ -41,7 +41,7 @@ import { useCarryOverPlans } from "@/hooks/useCarryOverPlans";
 import { useRecurringTasks } from "@/hooks/useRecurringTasks";
 import { useHabits } from "@/hooks/useHabits";
 import { useToast } from "@/context/ToastContext";
-import { sortTodosBySchedulePriority, estimateMinutes } from "@/lib/autoScheduler";
+import { sortTodosBySchedulePriority, estimateMinutes, type ScheduleBlock } from "@/lib/autoScheduler";
 import { DURATION_PRESETS, DEFAULT_DURATION_HOURS } from "@/lib/constants";
 import DatePicker from "@/components/calendar/DatePicker";
 import TimePicker from "@/components/planning/TimePicker";
@@ -66,6 +66,7 @@ export default function WorkspacesPage() {
     skipTodo,
     unskipTodo,
     updateSchedule: updateDailySchedule,
+    removePlan,
     refreshSchedule,
   } = useDailyPlan();
   const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
@@ -222,6 +223,38 @@ export default function WorkspacesPage() {
       },
     );
   }, [todayStr, todos, dailyPlans, updateAllTodo, skipTodo, unskipTodo, showToast]);
+
+  // ── 시간표에서 제거 (되돌리기 지원) ──
+  const handleRemoveFromSchedule = useCallback(async (planId: string, block: ScheduleBlock) => {
+    const plan = dailyPlans?.find((p) => p.id === planId);
+    const savedMinutes = plan?.estimated_minutes ?? (block.endMin - block.startMin);
+    const savedStart = plan?.scheduled_start_min ?? block.startMin;
+    const savedEnd = plan?.scheduled_end_min ?? block.endMin;
+    const todoId = block.todoId;
+
+    await removePlan(planId);
+
+    showToast("시간표에서 제거되었습니다", "info", {
+      label: "되돌리기",
+      onClick: async () => {
+        if (!todoId) return;
+        await addPlan(todoId, savedMinutes);
+        // 재배치 후 원래 시간 복원
+        const freshPlans = dailyPlans ?? [];
+        const restored = freshPlans.find((p) => p.todo_id === todoId && !p.is_skipped);
+        if (restored) {
+          await updateDailySchedule(restored.id, savedStart, savedEnd);
+        }
+        showToast("되돌리기 완료");
+      },
+    });
+  }, [dailyPlans, removePlan, addPlan, updateDailySchedule, showToast]);
+
+  // ── 시간대 변경 ──
+  const handleRescheduleBlock = useCallback(async (planId: string, startMin: number, endMin: number) => {
+    await updateDailySchedule(planId, startMin, endMin);
+    showToast("시간대가 변경되었습니다");
+  }, [updateDailySchedule, showToast]);
 
   // ── 지연된 할 일 (전체 워크스페이스 통합) ──
   const overdueTodos = useMemo(() => {
@@ -846,6 +879,8 @@ export default function WorkspacesPage() {
               onDeleteRecurringTask={handleDeleteRecurringTask}
               onOpenRoutineManager={() => setShowRoutineManager(true)}
               onPostponeTodos={handlePostponeTodos}
+              onRemoveFromSchedule={handleRemoveFromSchedule}
+              onRescheduleBlock={handleRescheduleBlock}
             />
           </div>
 

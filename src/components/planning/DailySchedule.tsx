@@ -13,6 +13,7 @@ import {
 } from "@/lib/autoScheduler";
 import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
 import PostponeTodoModal from "./PostponeTodoModal";
+import BlockActionPopover from "./BlockActionPopover";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -37,6 +38,8 @@ type DailyScheduleProps = {
   onDeleteRecurringTask?: (id: string) => void;
   onOpenRoutineManager?: () => void;
   onPostponeTodos?: (todoIds: string[]) => Promise<void>;
+  onRemoveFromSchedule?: (planId: string, block: ScheduleBlock) => void;
+  onRescheduleBlock?: (planId: string, startMin: number, endMin: number) => void;
 };
 
 // ============================================
@@ -269,9 +272,15 @@ export default function DailySchedule({
   onDeleteRecurringTask,
   onOpenRoutineManager,
   onPostponeTodos,
+  onRemoveFromSchedule,
+  onRescheduleBlock,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
+  const [activePopover, setActivePopover] = useState<{
+    block: ScheduleBlock;
+    rect: DOMRect;
+  } | null>(null);
   const HOUR_HEIGHT = compact ? 30 : 48;
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
@@ -521,6 +530,7 @@ export default function DailySchedule({
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setActivePopover(null); // 드래그 시작 시 팝오버 닫기
     setDragState({
       blockId: block.id,
       planId: block.planId,
@@ -848,7 +858,20 @@ export default function DailySchedule({
                       ⠿
                     </span>
                   )}
-                  <div className="min-w-0 flex-1">
+                  <div
+                    className="min-w-0 flex-1"
+                    {...(!compact && block.todoId && block.planId && !isCompleted && !isDragging
+                      ? {
+                          onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+                          onClick: (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            const el = (e.currentTarget as HTMLElement).closest(".absolute");
+                            if (el) setActivePopover({ block, rect: el.getBoundingClientRect() });
+                          },
+                          style: { cursor: "pointer" },
+                        }
+                      : {})}
+                  >
                     <p
                       className={`truncate font-medium ${
                         compact ? "text-[9px]" : "text-[11px]"
@@ -989,6 +1012,27 @@ export default function DailySchedule({
           </div>
         </div>
       )}
+      {/* Block Action Popover */}
+      {activePopover && activePopover.block.todoId && activePopover.block.planId && (
+        <BlockActionPopover
+          block={activePopover.block}
+          anchorRect={activePopover.rect}
+          onPostpone={() => {
+            onPostponeTodos?.([activePopover.block.todoId!]);
+            setActivePopover(null);
+          }}
+          onRemove={() => {
+            onRemoveFromSchedule?.(activePopover.block.planId!, activePopover.block);
+            setActivePopover(null);
+          }}
+          onReschedule={(s, e) => {
+            onRescheduleBlock?.(activePopover.block.planId!, s, e);
+            setActivePopover(null);
+          }}
+          onClose={() => setActivePopover(null)}
+        />
+      )}
+
       {/* Postpone Modal */}
       {showPostponeModal && onPostponeTodos && (
         <PostponeTodoModal
