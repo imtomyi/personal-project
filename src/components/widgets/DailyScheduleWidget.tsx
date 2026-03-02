@@ -160,7 +160,7 @@ export default function DailyScheduleWidget() {
         )}
         {stats.habitCount > 0 && (
           <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
-            습관 {stats.habitCount}
+            루틴 {stats.habitCount}
           </span>
         )}
         {!isConnected && (

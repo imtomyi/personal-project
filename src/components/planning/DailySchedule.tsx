@@ -76,7 +76,7 @@ const BLOCK_COLORS: Record<ScheduleBlockType, BlockColorConfig> = {
     bg: "bg-violet-50 dark:bg-violet-900/20",
     text: "text-violet-700 dark:text-violet-300",
     icon: "",
-    label: "습관",
+    label: "루틴",
   },
   todo: {
     border: "border-emerald-200 dark:border-emerald-800",

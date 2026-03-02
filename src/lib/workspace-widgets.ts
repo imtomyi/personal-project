@@ -20,7 +20,7 @@ export type WsWidgetMeta = {
 export const WS_WIDGET_REGISTRY: WsWidgetMeta[] = [
   { id: "exercise", label: "운동 세션", emoji: "💪", description: "오늘의 운동 기록 및 루틴 관리" },
   { id: "dday", label: "디데이", emoji: "📌", description: "중요한 날까지 카운트다운" },
-  { id: "habit", label: "습관 트래커", emoji: "✅", description: "매일 습관 체크 및 연속 달성 추적" },
+  { id: "habit", label: "루틴 트래커", emoji: "✅", description: "매일 루틴 체크 및 연속 달성 추적" },
   { id: "goals", label: "목표", emoji: "🎯", description: "목표 설정 및 진행도 관리" },
   { id: "daily-schedule", label: "오늘 시간표", emoji: "📅", description: "반복 일정 + 수업 + 자동 공부 배분" },
 ];

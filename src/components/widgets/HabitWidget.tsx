@@ -168,7 +168,7 @@ export default function HabitWidget({ onOpenRoutineManager }: HabitWidgetProps =
     return (
       <div className="card-surface p-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-[13px] font-semibold text-foreground dark:text-white">습관</h3>
+          <h3 className="text-[13px] font-semibold text-foreground dark:text-white">루틴</h3>
         </div>
         <div className="flex items-center justify-center py-4">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#007AFF] border-t-transparent" />
@@ -182,7 +182,7 @@ export default function HabitWidget({ onOpenRoutineManager }: HabitWidgetProps =
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="text-[13px] font-semibold text-foreground dark:text-white">습관</h3>
+          <h3 className="text-[13px] font-semibold text-foreground dark:text-white">루틴</h3>
           {totalChecks > 0 && (
             <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
               {Math.round((doneChecks / totalChecks) * 100)}%
@@ -232,7 +232,7 @@ export default function HabitWidget({ onOpenRoutineManager }: HabitWidgetProps =
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="습관 이름..."
+              placeholder="루틴 이름..."
               className="flex-1 rounded-md border border-black/[0.08] bg-white px-2.5 py-1.5 text-[12px] outline-none focus:border-[#007AFF] dark:border-white/[0.1] dark:bg-[#1c1c1e] dark:text-white"
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
               autoFocus
@@ -300,7 +300,7 @@ export default function HabitWidget({ onOpenRoutineManager }: HabitWidgetProps =
       {/* Habit grid */}
       {activeHabits.length === 0 ? (
         <div className="py-4 text-center">
-          <p className="text-[11px] text-secondary">습관을 추가해보세요</p>
+          <p className="text-[11px] text-secondary">루틴을 추가해보세요</p>
         </div>
       ) : (
         <div>
