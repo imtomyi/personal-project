@@ -7,13 +7,41 @@ import ServiceWorkerRegister from "@/components/layout/ServiceWorkerRegister";
 import InstallPrompt from "@/components/layout/InstallPrompt";
 import PullToRefresh from "@/components/layout/PullToRefresh";
 import ActivityTracker from "@/components/layout/ActivityTracker";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
+const siteUrl = "https://personal-project-alpha-six.vercel.app";
+const siteTitle = "KHUDO - 쿠두";
+const siteDescription = "시간표, 루틴, 가계부를 한 곳에서 관리하는 실시간 협업 생산성 앱";
+
 export const metadata: Metadata = {
-  title: "KHUDO - 쿠두",
-  description:
-    "실시간 협업 할 일 관리 앱",
+  title: siteTitle,
+  description: siteDescription,
   manifest: "/manifest.json",
+  metadataBase: new URL(siteUrl),
+  openGraph: {
+    title: siteTitle,
+    description: siteDescription,
+    url: siteUrl,
+    siteName: "KHUDO",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "KHUDO - 실시간 협업 생산성 앱",
+      },
+    ],
+    locale: "ko_KR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitle,
+    description: siteDescription,
+    images: ["/og-image.png"],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -60,6 +88,8 @@ export default function RootLayout({
             </ToastProvider>
           </AuthProvider>
         </ThemeProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
