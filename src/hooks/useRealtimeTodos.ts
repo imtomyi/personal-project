@@ -131,8 +131,7 @@ export function useRealtimeTodos(workspaceId: string) {
       setTodos((prev) => prev.filter((t) => t.id !== optimistic.id));
       throw error;
     }
-
-    await fetchTodos();
+    // fetchTodos()는 실시간 구독(onChanged)이 자동 호출하므로 생략
   }
 
   async function deleteTodo(id: string) {

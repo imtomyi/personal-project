@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useMemo, useCallback } from "react";
+import { memo, useState, useMemo, useCallback, useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Todo, Member } from "@/lib/types";
@@ -173,11 +173,17 @@ function TodoItem({
     onDelete(todo.id);
   }, [onDelete, todo.id]);
 
+  const addingRef = useRef(false);
   const handleAddSubtask = useCallback(async () => {
-    if (!subtaskTitle.trim() || !onAddSubtask) return;
-    await onAddSubtask(todo.id, subtaskTitle.trim());
-    setSubtaskTitle("");
-    setAddingSubtask(false);
+    if (!subtaskTitle.trim() || !onAddSubtask || addingRef.current) return;
+    addingRef.current = true;
+    try {
+      await onAddSubtask(todo.id, subtaskTitle.trim());
+      setSubtaskTitle("");
+      setAddingSubtask(false);
+    } finally {
+      addingRef.current = false;
+    }
   }, [onAddSubtask, todo.id, subtaskTitle]);
 
   const completedSubtasks = subtasks.filter((s) => s.is_completed).length;
@@ -703,7 +709,7 @@ function TodoItem({
                 className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-transparent px-2.5 py-1 text-xs outline-none focus:border-blue-400 dark:border-gray-600 dark:text-white"
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAddSubtask();
+                  if (e.key === "Enter") { e.preventDefault(); handleAddSubtask(); }
                   if (e.key === "Escape") { setAddingSubtask(false); setSubtaskTitle(""); }
                 }}
               />
