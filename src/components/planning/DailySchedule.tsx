@@ -12,6 +12,7 @@ import {
   type ScheduleBlockType,
 } from "@/lib/autoScheduler";
 import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
+import PostponeTodoModal from "./PostponeTodoModal";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -35,6 +36,7 @@ type DailyScheduleProps = {
   ddayEntries?: DdayEntry[];
   onDeleteRecurringTask?: (id: string) => void;
   onOpenRoutineManager?: () => void;
+  onPostponeTodos?: (todoIds: string[]) => Promise<void>;
 };
 
 // ============================================
@@ -266,8 +268,10 @@ export default function DailySchedule({
   ddayEntries,
   onDeleteRecurringTask,
   onOpenRoutineManager,
+  onPostponeTodos,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
+  const [showPostponeModal, setShowPostponeModal] = useState(false);
   const HOUR_HEIGHT = compact ? 30 : 48;
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
@@ -444,6 +448,19 @@ export default function DailySchedule({
     });
     return result;
   }, [dailyPlanResult, baseBlocks, todos, showAutoSchedule, assignments, today, ddayEntries]);
+
+  // 내일로 넘길 수 있는 미완료 todo 블록
+  const postponableItems = useMemo(() => {
+    return blocks
+      .filter((b) => b.type === "todo" && b.todoId)
+      .map((block) => {
+        const todo = todos.find((t) => t.id === block.todoId);
+        if (!todo || todo.is_completed || completedBlockIds.has(block.id)) return null;
+        const wsInfo = todo.workspace_id && workspaceMap ? workspaceMap.get(todo.workspace_id) : null;
+        return { block, todo, workspaceName: wsInfo?.name };
+      })
+      .filter(Boolean) as { block: ScheduleBlock; todo: Todo; workspaceName?: string }[];
+  }, [blocks, todos, completedBlockIds, workspaceMap]);
 
   // 겹침 컬럼 레이아웃 계산
   // minBlockMinutes: 최소 블록 높이(24px or 18px)에 해당하는 분 수
@@ -650,6 +667,14 @@ export default function DailySchedule({
                   ) : (
                     "🔄 시간표 새로고침"
                   )}
+                </button>
+              )}
+              {postponableItems.length > 0 && onPostponeTodos && (
+                <button
+                  onClick={() => setShowPostponeModal(true)}
+                  className="rounded-xl bg-orange-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-orange-600"
+                >
+                  ⏭️ 내일로 넘기기 ({postponableItems.length})
                 </button>
               )}
               {onOpenRoutineManager && (
@@ -963,6 +988,17 @@ export default function DailySchedule({
             )}
           </div>
         </div>
+      )}
+      {/* Postpone Modal */}
+      {showPostponeModal && onPostponeTodos && (
+        <PostponeTodoModal
+          items={postponableItems}
+          onPostpone={async (todoIds) => {
+            await onPostponeTodos(todoIds);
+            setShowPostponeModal(false);
+          }}
+          onClose={() => setShowPostponeModal(false)}
+        />
       )}
     </div>
   );

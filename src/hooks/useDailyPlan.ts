@@ -126,6 +126,29 @@ export function useDailyPlan(dateStr?: string) {
     await fetchPlans();
   }
 
+  // 되돌리기용: skip된 plan 복원
+  async function unskipTodo(todoId: string, estimatedMinutes = 30) {
+    if (!user) return;
+    setPlans((prev) =>
+      prev.map((p) =>
+        p.todo_id === todoId && p.date === targetDate
+          ? { ...p, is_skipped: false, estimated_minutes: estimatedMinutes }
+          : p,
+      ),
+    );
+    const { error } = await supabase
+      .from("daily_plans")
+      .update({
+        is_skipped: false,
+        estimated_minutes: estimatedMinutes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id)
+      .eq("todo_id", todoId)
+      .eq("date", targetDate);
+    if (error) await fetchPlans();
+  }
+
   // 드래그/리사이즈 후 시간 업데이트
   async function updateSchedule(
     planId: string,
@@ -253,6 +276,7 @@ export function useDailyPlan(dateStr?: string) {
     addPlan,
     addPlanBatch,
     skipTodo,
+    unskipTodo,
     updateSchedule,
     batchUpdateSchedules,
     removePlan,

@@ -64,6 +64,7 @@ export default function WorkspacesPage() {
     addPlan,
     addPlanBatch,
     skipTodo,
+    unskipTodo,
     updateSchedule: updateDailySchedule,
     refreshSchedule,
   } = useDailyPlan();
@@ -176,6 +177,51 @@ export default function WorkspacesPage() {
       deletingIdsRef.current.delete(id);
     }
   }, [deleteRecurringTask, showToast]);
+
+  // ── 내일로 넘기기 핸들러 ──
+  const handlePostponeTodos = useCallback(async (todoIds: string[]) => {
+    if (todoIds.length === 0) return;
+    const tomorrow = (() => {
+      const d = parseLocalDate(todayStr);
+      d.setDate(d.getDate() + 1);
+      return toDateStr(d);
+    })();
+
+    // 되돌리기용: 기존 due_date와 plan minutes 저장
+    const prevDates = new Map<string, string | null>();
+    const planMinutes = new Map<string, number>();
+    for (const todoId of todoIds) {
+      const todo = todos.find((t: WorkspaceTodo) => t.id === todoId);
+      if (todo) prevDates.set(todoId, todo.due_date);
+      const plan = dailyPlans?.find((p) => p.todo_id === todoId && !p.is_skipped);
+      if (plan) planMinutes.set(todoId, plan.estimated_minutes);
+    }
+
+    // 1) due_date → 내일, 2) 오늘 plan skip
+    await Promise.all(
+      todoIds.flatMap((todoId) => [
+        updateAllTodo(todoId, { due_date: tomorrow }),
+        skipTodo(todoId),
+      ]),
+    );
+
+    showToast(
+      `${todoIds.length}개 할 일이 내일로 넘겨졌습니다`,
+      "success",
+      {
+        label: "되돌리기",
+        onClick: async () => {
+          await Promise.all(
+            todoIds.flatMap((todoId) => [
+              updateAllTodo(todoId, { due_date: prevDates.get(todoId) ?? todayStr }),
+              unskipTodo(todoId, planMinutes.get(todoId) ?? 30),
+            ]),
+          );
+          showToast("되돌리기 완료");
+        },
+      },
+    );
+  }, [todayStr, todos, dailyPlans, updateAllTodo, skipTodo, unskipTodo, showToast]);
 
   // ── 지연된 할 일 (전체 워크스페이스 통합) ──
   const overdueTodos = useMemo(() => {
@@ -799,6 +845,7 @@ export default function WorkspacesPage() {
               ddayEntries={todayDdayEntries}
               onDeleteRecurringTask={handleDeleteRecurringTask}
               onOpenRoutineManager={() => setShowRoutineManager(true)}
+              onPostponeTodos={handlePostponeTodos}
             />
           </div>
 
