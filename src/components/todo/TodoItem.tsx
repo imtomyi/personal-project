@@ -649,8 +649,8 @@ function TodoItem({
                         {sub.title}
                       </span>
 
-                      {/* Subtask date/duration controls — visible on hover */}
-                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/sub:opacity-100">
+                      {/* Subtask date/duration controls — always visible */}
+                      <div className="flex items-center gap-1">
                         <DatePicker
                           value={sub.due_date ? toDateStr(parseLocalDate(sub.due_date)) : ""}
                           onChange={(date) => onUpdate(sub.id, { due_date: date })}
