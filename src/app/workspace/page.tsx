@@ -46,6 +46,7 @@ import { DURATION_PRESETS, DEFAULT_DURATION_HOURS } from "@/lib/constants";
 import DatePicker from "@/components/calendar/DatePicker";
 import TimePicker from "@/components/planning/TimePicker";
 import type { Todo } from "@/lib/types";
+import OnboardingModal from "@/components/workspace/OnboardingModal";
 
 export default function WorkspacesPage() {
   const { user, loading } = useAuth();
@@ -604,6 +605,7 @@ export default function WorkspacesPage() {
 
   return (
     <div className="bg-gradient-to-b from-[#5856D6]/[0.07] via-[#f5f5f7] to-[#f5f5f7] dark:from-[#5856D6]/[0.12] dark:via-[#111827] dark:to-[#111827]">
+      <OnboardingModal />
       <Header />
 
       {/* 워크스페이스 서브 헤더 */}
