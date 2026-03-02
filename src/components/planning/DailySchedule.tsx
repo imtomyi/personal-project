@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, DailyPlan, DdayEntry } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, HabitLog, DailyPlan, DdayEntry } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import {
   generateSchedule,
@@ -41,6 +41,9 @@ type DailyScheduleProps = {
   onRemoveFromSchedule?: (planId: string, block: ScheduleBlock) => void;
   onRescheduleBlock?: (planId: string, startMin: number, endMin: number) => void;
   onCleanupStalePlans?: (planIds: string[]) => void;
+  // 습관 완료 토글
+  habitLogs?: HabitLog[];
+  onHabitToggle?: (habitId: string, date: string) => Promise<void>;
 };
 
 // ============================================
@@ -276,6 +279,8 @@ export default function DailySchedule({
   onRemoveFromSchedule,
   onRescheduleBlock,
   onCleanupStalePlans,
+  habitLogs,
+  onHabitToggle,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
@@ -848,7 +853,10 @@ export default function DailySchedule({
               const isDragging = dragState?.blockId === block.id;
               const isDraggable = !!block.planId && !compact;
               const todoForBlock = block.todoId ? todos.find(t => t.id === block.todoId) : null;
-              const isCompleted = completedBlockIds.has(block.id) || !!todoForBlock?.is_completed;
+              const isHabitCompleted = block.habitId
+                ? habitLogs?.some(l => l.habit_id === block.habitId && l.date === today)
+                : false;
+              const isCompleted = completedBlockIds.has(block.id) || !!todoForBlock?.is_completed || isHabitCompleted;
 
               return (
                 <div
@@ -860,7 +868,7 @@ export default function DailySchedule({
                   } ${
                     isDragging ? "z-30 shadow-lg opacity-90 ring-2 ring-[#007AFF]/30" : ""
                   } ${isDraggable && !isCompleted ? "cursor-grab active:cursor-grabbing" : ""} ${
-                    !compact && block.todoId ? "pr-10" : ""
+                    !compact && (block.todoId || block.habitId) ? "pr-10" : ""
                   }`}
                   style={blockStyle}
                   onPointerDown={
@@ -914,7 +922,7 @@ export default function DailySchedule({
                     )}
                   </div>
                   {/* 완료/미완료 토글 — absolute right-center로 블록 높이 무관하게 동일 위치 */}
-                  {!compact && block.todoId && !isDragging && (
+                  {!compact && (block.todoId || block.habitId) && !isDragging && (
                     <button
                       onPointerDown={(e) => {
                         // 드래그 핸들러가 pointerdown을 가로채서 click이 안 되므로
@@ -923,6 +931,12 @@ export default function DailySchedule({
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        // 습관 블록 토글
+                        if (block.habitId) {
+                          onHabitToggle?.(block.habitId, today);
+                          return;
+                        }
+                        // 할 일 블록 토글
                         if (isCompleted) {
                           setCompletedBlockIds(prev => {
                             const s = new Set(prev);

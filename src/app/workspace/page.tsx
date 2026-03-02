@@ -72,7 +72,7 @@ export default function WorkspacesPage() {
   } = useDailyPlan();
   const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
   const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
-  const { habitsWithTime } = useHabits();
+  const { habitsWithTime, toggleLog, logs: habitLogs } = useHabits();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
 
@@ -890,6 +890,8 @@ export default function WorkspacesPage() {
               onRemoveFromSchedule={handleRemoveFromSchedule}
               onRescheduleBlock={handleRescheduleBlock}
               onCleanupStalePlans={handleCleanupStalePlans}
+              habitLogs={habitLogs}
+              onHabitToggle={toggleLog}
             />
           </div>
 

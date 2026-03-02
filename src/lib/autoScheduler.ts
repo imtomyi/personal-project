@@ -21,6 +21,7 @@ export type ScheduleBlock = {
   assignmentId?: string; // study blocks → assignment 연결
   courseName?: string; // class/study 블록 표시용
   ddayEntryId?: string; // 디데이 항목 연결
+  habitId?: string; // 습관 블록 → 완료 토글용
 };
 
 type ScheduleOptions = {
@@ -327,6 +328,7 @@ function generateHabitBlocks(
         endMin,
         type: "habit" as const,
         color: "violet",
+        habitId: h.id,
       });
     } else {
       unscheduled.push(h);
