@@ -647,21 +647,24 @@ export default function DailySchedule({
               <span>📅</span>
               오늘의 시간표
             </h3>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center overflow-hidden rounded-lg border border-black/[0.06] bg-black/[0.03] dark:border-white/[0.08] dark:bg-white/[0.04]">
               {onOpenTriage && (
                 <button
                   onClick={onOpenTriage}
-                  className="rounded-xl bg-[#007AFF] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[#0056b3]"
+                  className="border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:border-white/[0.08] dark:hover:bg-white/[0.08] dark:hover:text-white"
                 >
-                  📋 오늘 계획
+                  📋 계획
                 </button>
               )}
               {todayDueTodos.length > 0 && onAutoDistributeTodayTasks && (
                 <button
                   onClick={() => onAutoDistributeTodayTasks(todayDueTodos)}
-                  className="rounded-xl bg-emerald-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-emerald-600"
+                  className="relative border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:border-white/[0.08] dark:hover:bg-white/[0.08] dark:hover:text-white"
                 >
-                  📅 오늘 할 일 배치 ({todayDueTodos.length})
+                  📅 배치
+                  <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white">
+                    {todayDueTodos.length}
+                  </span>
                 </button>
               )}
               {hasActivePlans && onRefreshSchedule && (
@@ -675,7 +678,7 @@ export default function DailySchedule({
                     }
                   }}
                   disabled={refreshing}
-                  className="rounded-xl bg-amber-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
+                  className="border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm disabled:opacity-50 dark:border-white/[0.08] dark:hover:bg-white/[0.08] dark:hover:text-white"
                   title="시간표를 재배치합니다"
                 >
                   {refreshing ? (
@@ -684,39 +687,41 @@ export default function DailySchedule({
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      재배치 중...
                     </span>
                   ) : (
-                    "🔄 시간표 새로고침"
+                    "🔄 새로고침"
                   )}
                 </button>
               )}
               {postponableItems.length > 0 && onPostponeTodos && (
                 <button
                   onClick={() => setShowPostponeModal(true)}
-                  className="rounded-xl bg-orange-500 px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-orange-600"
+                  className="relative border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:border-white/[0.08] dark:hover:bg-white/[0.08] dark:hover:text-white"
                 >
-                  ⏭️ 내일로 넘기기 ({postponableItems.length})
+                  ⏭️ 내일로
+                  <span className="ml-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold text-white">
+                    {postponableItems.length}
+                  </span>
                 </button>
               )}
               {onOpenRoutineManager && (
                 <button
                   onClick={onOpenRoutineManager}
-                  className="rounded-xl bg-black/[0.05] px-3 py-1.5 text-[12px] font-medium text-secondary transition-colors hover:bg-black/[0.08] dark:bg-white/[0.08] dark:hover:bg-white/[0.12]"
+                  className={`px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:hover:bg-white/[0.08] dark:hover:text-white ${!hasActivePlans ? "border-r border-black/[0.06] dark:border-white/[0.08]" : ""}`}
                 >
-                  🔁 루틴 관리
+                  🔁 루틴
                 </button>
               )}
               {!hasActivePlans && (
                 <button
                   onClick={() => setShowAutoSchedule(!showAutoSchedule)}
-                  className={`rounded-xl px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                  className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showAutoSchedule
-                      ? "bg-[#007AFF] text-white"
-                      : "bg-black/[0.05] text-secondary hover:bg-black/[0.08] dark:bg-white/[0.08] dark:hover:bg-white/[0.12]"
+                      ? "bg-white text-[#007AFF] shadow-sm dark:bg-white/[0.1] dark:text-blue-400"
+                      : "text-secondary hover:bg-white hover:text-foreground hover:shadow-sm dark:hover:bg-white/[0.08] dark:hover:text-white"
                   }`}
                 >
-                  {showAutoSchedule ? "✨ 자동 배분 적용됨" : "✨ 자동 배분"}
+                  ✨ 자동배분
                 </button>
               )}
             </div>
