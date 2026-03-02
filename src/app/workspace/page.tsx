@@ -52,7 +52,7 @@ export default function WorkspacesPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const { todos, workspaces, loading: todosLoading, addTodo: addAllTodo, updateTodo: updateAllTodo, archiveWorkspace, addWorkspaceLocally } = useAllWorkspaceTodos();
-  const { canvasTodos, canvasCourses, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
+  const { canvasTodos, canvasCourses, classEvents, isConnected: canvasConnected, loading: canvasLoading } = useCanvasCalendar();
   const { entries: ddayEntries, updateEntry: updateDdayEntry } = useDdayEntries();
   const { showToast } = useToast();
   const [showRoutineManager, setShowRoutineManager] = useState(false);
@@ -75,6 +75,15 @@ export default function WorkspacesPage() {
   const { habitsWithTime, toggleLog, logs: habitLogs } = useHabits();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
+
+  // ── Canvas 과목명 매핑 (시간표 수업 블록용) ──
+  const courseNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of canvasCourses) {
+      map.set(`course_${c.id}`, c.name);
+    }
+    return map;
+  }, [canvasCourses]);
 
   // ── 오늘 디데이 항목 필터 (시간표 연동) ──
   const todayDdayEntries = useMemo(
@@ -892,6 +901,8 @@ export default function WorkspacesPage() {
               onCleanupStalePlans={handleCleanupStalePlans}
               habitLogs={habitLogs}
               onHabitToggle={toggleLog}
+              classEvents={classEvents}
+              courseNames={courseNames}
             />
           </div>
 
