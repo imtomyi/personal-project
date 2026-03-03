@@ -76,7 +76,7 @@ export default function WorkspacesPage() {
   const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
   const { habitsWithTime, toggleLog, logs: habitLogs } = useHabits();
   const { schedules: courseSchedules } = useCourseSchedules();
-  const { events: icsEvents, feedUrl: icsFeedUrl, setFeedUrl: setIcsFeedUrl, loading: icsFeedLoading } = useIcsFeed();
+  const { events: icsEvents } = useIcsFeed();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
 
@@ -909,9 +909,6 @@ export default function WorkspacesPage() {
               courseNames={courseNames}
               courseSchedules={courseSchedules}
               icsEvents={icsEvents}
-              icsFeedUrl={icsFeedUrl}
-              onIcsFeedUrlChange={setIcsFeedUrl}
-              icsFeedLoading={icsFeedLoading}
             />
           </div>
 
