@@ -30,6 +30,7 @@ import KhuAcademicCalendar from "@/components/khu/KhuAcademicCalendar";
 import KhuShuttleInfo from "@/components/khu/KhuShuttleInfo";
 import KhuCanvasSync from "@/components/khu/KhuCanvasSync";
 import KhuMealInfo from "@/components/khu/KhuMealInfo";
+import { useIcsFeed } from "@/hooks/useIcsFeed";
 import SortableWidget from "@/components/khu/SortableWidget";
 import WidgetPicker from "@/components/khu/WidgetPicker";
 
@@ -50,6 +51,7 @@ export default function KhuPage() {
   } = useAssignments();
   const canvas = useCanvas();
   const { workspaces } = useAllWorkspaceTodos();
+  const { events: icsEvents, feedUrl: icsFeedUrl, setFeedUrl: setIcsFeedUrl, loading: icsFeedLoading } = useIcsFeed();
   const {
     widgets,
     visibleWidgets,
@@ -126,6 +128,10 @@ export default function KhuPage() {
             onDisconnect={canvas.disconnect}
             onFetchAllAssignments={canvas.fetchAllAssignments}
             onImportToPlanner={handleCanvasImport}
+            icsFeedUrl={icsFeedUrl}
+            onIcsFeedUrlChange={setIcsFeedUrl}
+            icsFeedLoading={icsFeedLoading}
+            icsFeedEventCount={icsEvents.length}
           />
         );
       default:

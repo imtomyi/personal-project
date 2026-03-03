@@ -13,6 +13,11 @@ type KhuCanvasSyncProps = {
   onDisconnect: () => void;
   onFetchAllAssignments: () => Promise<void>;
   onImportToPlanner?: () => Promise<void>;
+  // ICS 피드
+  icsFeedUrl?: string | null;
+  onIcsFeedUrlChange?: (url: string | null) => void;
+  icsFeedLoading?: boolean;
+  icsFeedEventCount?: number;
 };
 
 export default function KhuCanvasSync({
@@ -25,10 +30,16 @@ export default function KhuCanvasSync({
   onDisconnect,
   onFetchAllAssignments,
   onImportToPlanner,
+  icsFeedUrl,
+  onIcsFeedUrlChange,
+  icsFeedLoading,
+  icsFeedEventCount,
 }: KhuCanvasSyncProps) {
   const [tokenInput, setTokenInput] = useState("");
   const [showSetup, setShowSetup] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [icsDraft, setIcsDraft] = useState(icsFeedUrl || "");
+  const [showIcsInput, setShowIcsInput] = useState(false);
 
   async function handleConnect() {
     if (!tokenInput.trim()) return;
@@ -260,6 +271,70 @@ export default function KhuCanvasSync({
         >
           과제 목록 불러오기
         </button>
+      )}
+
+      {/* ICS 캘린더 피드 구독 */}
+      {onIcsFeedUrlChange && (
+        <div className="mt-4 border-t border-gray-100 pt-4 dark:border-gray-800">
+          <div className="flex items-center justify-between">
+            <h4 className="text-[12px] font-semibold text-gray-900 dark:text-white">
+              📡 캘린더 피드
+            </h4>
+            <div className="flex items-center gap-2">
+              {icsFeedUrl && (
+                <span className="flex items-center gap-1 text-[10px] text-green-600 dark:text-green-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  구독 중 · {icsFeedEventCount ?? 0}개
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setShowIcsInput(!showIcsInput);
+                  setIcsDraft(icsFeedUrl || "");
+                }}
+                className="text-[10px] text-[#9B1B30] hover:text-[#9B1B30]/80 dark:text-[#e8a0ad]"
+              >
+                {showIcsInput ? "닫기" : icsFeedUrl ? "변경" : "추가"}
+              </button>
+            </div>
+          </div>
+
+          {!showIcsInput && icsFeedUrl && (
+            <p className="mt-1 truncate text-[10px] text-gray-400 dark:text-gray-500">
+              {icsFeedUrl}
+            </p>
+          )}
+
+          {showIcsInput && (
+            <div className="mt-2">
+              <div className="flex gap-1.5">
+                <input
+                  type="url"
+                  placeholder="ICS 피드 URL (예: https://.../*.ics)"
+                  value={icsDraft}
+                  onChange={(e) => setIcsDraft(e.target.value)}
+                  className="flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] text-foreground placeholder:text-gray-400 focus:border-[#9B1B30] focus:outline-none focus:ring-1 focus:ring-[#9B1B30] dark:border-gray-700 dark:bg-white/[0.06] dark:text-white"
+                />
+                <button
+                  onClick={() => {
+                    const trimmed = icsDraft.trim();
+                    onIcsFeedUrlChange(trimmed || null);
+                    if (!trimmed) setIcsDraft("");
+                    setShowIcsInput(false);
+                  }}
+                  disabled={icsFeedLoading}
+                  className="whitespace-nowrap rounded-md bg-[#9B1B30] px-2.5 py-1.5 text-[10px] font-medium text-white transition-colors hover:bg-[#9B1B30]/90 disabled:opacity-50"
+                >
+                  {icsFeedLoading ? "..." : icsDraft.trim() ? "저장" : "해제"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400 dark:text-gray-500">
+                LearningX → 캘린더 → 캘린더 피드 에서 URL을 복사하세요.
+                시간이 지정된 이벤트만 시간표에 표시됩니다.
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
