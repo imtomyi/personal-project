@@ -1,4 +1,4 @@
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan, DdayEntry, ScheduleBlockColor } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, AssignmentType, Habit, DailyPlan, DdayEntry, ScheduleBlockColor, CourseSchedule } from "@/lib/types";
 import { ASSIGNMENT_EFFORT_HOURS } from "@/lib/constants";
 import { toDateStr, parseLocalDate, timeToMinutes } from "@/lib/date";
 
@@ -30,6 +30,7 @@ type ScheduleOptions = {
   dateStr?: string; // "YYYY-MM-DD"
   courseNames?: Map<string, string>; // context_code → course name
   habits?: Habit[]; // 시간 설정된 습관 → 시간표 블록
+  courseSchedules?: CourseSchedule[]; // 수업 시간표 (course_schedules 테이블)
 };
 
 
@@ -172,6 +173,34 @@ function generateClassBlocks(
   }
 
   return blocks;
+}
+
+// ============================================
+// 1b. course_schedules 테이블 기반 수업 블록
+// ============================================
+
+function generateCourseScheduleBlocks(
+  courseSchedules: CourseSchedule[],
+  dayOfWeek: number,
+): ScheduleBlock[] {
+  return courseSchedules
+    .filter((cs) => cs.day_of_week === dayOfWeek)
+    .map((cs) => {
+      const [sh, sm] = cs.time_start.split(":").map(Number);
+      const [eh, em] = cs.time_end.split(":").map(Number);
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+
+      return {
+        id: `course-${cs.id}`,
+        title: cs.course_name,
+        startMin,
+        endMin: endMin > startMin ? endMin : startMin + 75,
+        type: "class" as const,
+        color: "indigo" as const,
+        courseName: cs.course_name,
+      };
+    });
 }
 
 // ============================================
@@ -399,6 +428,12 @@ export function generateSchedule(
         options.courseNames,
       );
       blocks.push(...classBlocks);
+    }
+
+    // 3b. course_schedules 테이블 기반 수업 블록 배치
+    if (options?.courseSchedules && options.courseSchedules.length > 0) {
+      const csBlocks = generateCourseScheduleBlocks(options.courseSchedules, dayOfWeek);
+      blocks.push(...csBlocks);
     }
 
     // 4. 시간 미설정 습관 → 빈 슬롯에 자동 배치

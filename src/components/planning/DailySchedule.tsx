@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback, useRef, useEffect } from "react";
-import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, HabitLog, DailyPlan, DdayEntry } from "@/lib/types";
+import type { Todo, RecurringTask, Assignment, CanvasCalendarEvent, Habit, HabitLog, DailyPlan, DdayEntry, CourseSchedule } from "@/lib/types";
 import { SECTION_HEADER_MARKER } from "@/lib/types";
 import {
   generateSchedule,
@@ -44,6 +44,8 @@ type DailyScheduleProps = {
   // 습관 완료 토글
   habitLogs?: HabitLog[];
   onHabitToggle?: (habitId: string, date: string) => Promise<void>;
+  // 수업 시간표 (course_schedules)
+  courseSchedules?: CourseSchedule[];
 };
 
 // ============================================
@@ -281,6 +283,7 @@ export default function DailySchedule({
   onCleanupStalePlans,
   habitLogs,
   onHabitToggle,
+  courseSchedules,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
@@ -407,8 +410,9 @@ export default function DailySchedule({
         dateStr: today,
         courseNames,
         habits,
+        courseSchedules,
       }),
-    [recurringTasks, todos, dayOfWeek, classEvents, today, courseNames, habits]
+    [recurringTasks, todos, dayOfWeek, classEvents, today, courseNames, habits, courseSchedules]
   );
 
   // 일일 계획 자동 배치 결과

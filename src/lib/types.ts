@@ -131,6 +131,22 @@ export type KhuNotice = {
 };
 
 // ============================================
+// 수업 시간표 (course_schedules) 타입
+// ============================================
+export type CourseSchedule = {
+  id: string;
+  user_id: string;
+  canvas_course_id: number | null;
+  course_name: string;
+  day_of_week: number; // 0=일..6=토
+  time_start: string;  // "HH:MM"
+  time_end: string;    // "HH:MM"
+  location: string | null;
+  color: string;       // 기본 '#4F46E5'
+  created_at: string;
+};
+
+// ============================================
 // 가계부 (소비 트래커) 타입
 // ============================================
 export type ExpenseCategory =
