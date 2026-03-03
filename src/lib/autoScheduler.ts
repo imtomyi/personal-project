@@ -24,6 +24,15 @@ export type ScheduleBlock = {
   habitId?: string; // 습관 블록 → 완료 토글용
 };
 
+/** ICS 피드에서 파싱된 이벤트 (시간표 표시용) */
+export type IcsScheduleEvent = {
+  uid: string;
+  summary: string;
+  dtstart: string;     // ISO datetime or date
+  dtend: string | null;
+  allDay: boolean;
+};
+
 type ScheduleOptions = {
   classEvents?: CanvasCalendarEvent[];
   assignments?: Assignment[];
@@ -31,6 +40,7 @@ type ScheduleOptions = {
   courseNames?: Map<string, string>; // context_code → course name
   habits?: Habit[]; // 시간 설정된 습관 → 시간표 블록
   courseSchedules?: CourseSchedule[]; // 수업 시간표 (course_schedules 테이블)
+  icsEvents?: IcsScheduleEvent[]; // ICS 피드 이벤트
 };
 
 
@@ -201,6 +211,46 @@ function generateCourseScheduleBlocks(
         courseName: cs.course_name,
       };
     });
+}
+
+// ============================================
+// 1c. ICS 피드 이벤트 → 시간표 블록
+// ============================================
+
+function generateIcsBlocks(
+  icsEvents: IcsScheduleEvent[],
+  dateStr: string,
+): ScheduleBlock[] {
+  const blocks: ScheduleBlock[] = [];
+
+  for (const ev of icsEvents) {
+    // 시간이 있는 이벤트만 시간표에 표시 (all-day 제외)
+    if (ev.allDay || !ev.dtstart.includes("T")) continue;
+
+    const start = new Date(ev.dtstart);
+    const eventDateStr = toDateStr(start);
+    if (eventDateStr !== dateStr) continue;
+
+    const startMin = start.getHours() * 60 + start.getMinutes();
+    let endMin = startMin + 60; // 기본 1시간
+    if (ev.dtend) {
+      const end = new Date(ev.dtend);
+      endMin = end.getHours() * 60 + end.getMinutes();
+      if (endMin <= startMin) endMin = startMin + 60;
+    }
+
+    blocks.push({
+      id: `ics-${ev.uid}`,
+      title: ev.summary,
+      startMin,
+      endMin,
+      type: "class",
+      color: "sky",
+      courseName: ev.summary,
+    });
+  }
+
+  return blocks;
 }
 
 // ============================================
@@ -434,6 +484,12 @@ export function generateSchedule(
     if (options?.courseSchedules && options.courseSchedules.length > 0) {
       const csBlocks = generateCourseScheduleBlocks(options.courseSchedules, dayOfWeek);
       blocks.push(...csBlocks);
+    }
+
+    // 3c. ICS 피드 이벤트 블록 배치
+    if (options?.icsEvents && options.icsEvents.length > 0 && options.dateStr) {
+      const icsBlocks = generateIcsBlocks(options.icsEvents, options.dateStr);
+      blocks.push(...icsBlocks);
     }
 
     // 4. 시간 미설정 습관 → 빈 슬롯에 자동 배치

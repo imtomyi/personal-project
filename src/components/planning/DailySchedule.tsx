@@ -10,6 +10,7 @@ import {
   placeDdayBlocks,
   type ScheduleBlock,
   type ScheduleBlockType,
+  type IcsScheduleEvent,
 } from "@/lib/autoScheduler";
 import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
 import PostponeTodoModal from "./PostponeTodoModal";
@@ -46,6 +47,11 @@ type DailyScheduleProps = {
   onHabitToggle?: (habitId: string, date: string) => Promise<void>;
   // 수업 시간표 (course_schedules)
   courseSchedules?: CourseSchedule[];
+  // ICS 피드 이벤트
+  icsEvents?: IcsScheduleEvent[];
+  icsFeedUrl?: string | null;
+  onIcsFeedUrlChange?: (url: string | null) => void;
+  icsFeedLoading?: boolean;
 };
 
 // ============================================
@@ -284,6 +290,10 @@ export default function DailySchedule({
   habitLogs,
   onHabitToggle,
   courseSchedules,
+  icsEvents,
+  icsFeedUrl,
+  onIcsFeedUrlChange,
+  icsFeedLoading,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
@@ -294,6 +304,8 @@ export default function DailySchedule({
   const HOUR_HEIGHT = compact ? 30 : 48;
 
   const [showAutoSchedule, setShowAutoSchedule] = useState(false);
+  const [showIcsFeedInput, setShowIcsFeedInput] = useState(false);
+  const [icsFeedDraft, setIcsFeedDraft] = useState("");
   const [dragState, setDragState] = useState<DragState | null>(null);
   // 완료 애니메이션: 취소선 + 페이드아웃 후 실제 업데이트
   const [completedBlockIds, setCompletedBlockIds] = useState<Set<string>>(new Set());
@@ -411,8 +423,9 @@ export default function DailySchedule({
         courseNames,
         habits,
         courseSchedules,
+        icsEvents,
       }),
-    [recurringTasks, todos, dayOfWeek, classEvents, today, courseNames, habits, courseSchedules]
+    [recurringTasks, todos, dayOfWeek, classEvents, today, courseNames, habits, courseSchedules, icsEvents]
   );
 
   // 일일 계획 자동 배치 결과
@@ -721,6 +734,21 @@ export default function DailySchedule({
                   🔁 루틴
                 </button>
               )}
+              {onIcsFeedUrlChange && (
+                <button
+                  onClick={() => {
+                    setShowIcsFeedInput(!showIcsFeedInput);
+                    setIcsFeedDraft(icsFeedUrl || "");
+                  }}
+                  className={`border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium transition-colors dark:border-white/[0.08] ${
+                    showIcsFeedInput || icsFeedUrl
+                      ? "bg-white text-sky-600 shadow-sm dark:bg-white/[0.1] dark:text-sky-400"
+                      : "text-secondary hover:bg-white hover:text-foreground hover:shadow-sm dark:hover:bg-white/[0.08] dark:hover:text-white"
+                  }`}
+                >
+                  📡 피드{icsFeedUrl ? " ✓" : ""}
+                </button>
+              )}
               {!hasActivePlans && (
                 <button
                   onClick={() => setShowAutoSchedule(!showAutoSchedule)}
@@ -734,6 +762,42 @@ export default function DailySchedule({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ICS 피드 URL 입력 */}
+        {showIcsFeedInput && !compact && onIcsFeedUrlChange && (
+          <div className="mb-3 rounded-lg border border-sky-200 bg-sky-50/50 p-3 dark:border-sky-800 dark:bg-sky-900/20">
+            <div className="mb-1.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">
+              📡 ICS 캘린더 피드 구독
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                placeholder="ICS 피드 URL (예: https://.../*.ics)"
+                value={icsFeedDraft}
+                onChange={(e) => setIcsFeedDraft(e.target.value)}
+                className="flex-1 rounded-md border border-black/10 bg-white px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-secondary/60 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 dark:border-white/10 dark:bg-white/[0.06] dark:text-white"
+              />
+              <button
+                onClick={() => {
+                  const trimmed = icsFeedDraft.trim();
+                  onIcsFeedUrlChange(trimmed || null);
+                  if (!trimmed) setIcsFeedDraft("");
+                  setShowIcsFeedInput(false);
+                }}
+                disabled={icsFeedLoading}
+                className="whitespace-nowrap rounded-md bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-white transition-colors hover:bg-sky-600 disabled:opacity-50"
+              >
+                {icsFeedLoading ? "로딩..." : icsFeedDraft.trim() ? "저장" : "해제"}
+              </button>
+            </div>
+            {icsFeedUrl && (
+              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-sky-600 dark:text-sky-400">
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                구독 중 · 이벤트 {icsEvents?.length ?? 0}개
+              </div>
+            )}
           </div>
         )}
 

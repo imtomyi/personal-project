@@ -41,6 +41,7 @@ import { useCarryOverPlans } from "@/hooks/useCarryOverPlans";
 import { useRecurringTasks } from "@/hooks/useRecurringTasks";
 import { useHabits } from "@/hooks/useHabits";
 import { useCourseSchedules } from "@/hooks/useCourseSchedules";
+import { useIcsFeed } from "@/hooks/useIcsFeed";
 import { useToast } from "@/context/ToastContext";
 import { sortTodosBySchedulePriority, estimateMinutes, type ScheduleBlock } from "@/lib/autoScheduler";
 import { DURATION_PRESETS, DEFAULT_DURATION_HOURS } from "@/lib/constants";
@@ -75,6 +76,7 @@ export default function WorkspacesPage() {
   const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
   const { habitsWithTime, toggleLog, logs: habitLogs } = useHabits();
   const { schedules: courseSchedules } = useCourseSchedules();
+  const { events: icsEvents, feedUrl: icsFeedUrl, setFeedUrl: setIcsFeedUrl, loading: icsFeedLoading } = useIcsFeed();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
 
@@ -906,6 +908,10 @@ export default function WorkspacesPage() {
               classEvents={classEvents}
               courseNames={courseNames}
               courseSchedules={courseSchedules}
+              icsEvents={icsEvents}
+              icsFeedUrl={icsFeedUrl}
+              onIcsFeedUrlChange={setIcsFeedUrl}
+              icsFeedLoading={icsFeedLoading}
             />
           </div>
 
