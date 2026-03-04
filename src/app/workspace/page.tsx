@@ -804,11 +804,11 @@ export default function WorkspacesPage() {
 
         {/* 다가오는 할 일 */}
         {!todosLoading && upcomingTodos.length > 0 && (
-          <div className="card-surface mb-6 p-4 sm:mb-8 sm:p-6">
+          <div className="card-surface mb-6 overflow-hidden p-4 sm:mb-8 sm:p-6">
             <h2 className="mb-4 text-[16px] font-semibold text-foreground sm:mb-5 sm:text-[17px] dark:text-white">
               다가오는 할 일
             </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {upcomingTodos.filter(item => !exitingUpcomingIds.has(item.id) || true).map((item) => {
                 const color = upcomingColorMap.get(item.workspace_id);
                 const isExiting = exitingUpcomingIds.has(item.id);

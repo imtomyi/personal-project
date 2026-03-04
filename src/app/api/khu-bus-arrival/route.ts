@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 // 경희대 국제캠퍼스 주요 정류소 (GBIS stationId)
 const STATIONS = {
   경희대정문: { stationId: "228000723", mobileNo: "29038" },
-  사색의광장: { stationId: "228000708", mobileNo: "47647" },
+  사색의광장: { stationId: "228000708", mobileNo: "29058" },
 } as const;
 
 // 교내 무료 구간에 해당하는 노선 번호
