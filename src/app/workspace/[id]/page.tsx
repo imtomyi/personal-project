@@ -260,8 +260,8 @@ export default function WorkspaceDetailPage() {
                   title="색상 변경"
                 />
                 {showColorPicker && (
-                  <div className="absolute left-0 top-8 z-50 rounded-xl border border-gray-200 bg-white p-2.5 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                    <div className="grid grid-cols-6 gap-1.5">
+                  <div className="absolute left-0 top-8 z-50 w-[200px] rounded-xl border border-gray-200 bg-white p-3 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="grid grid-cols-6 gap-2">
                       {WORKSPACE_COLOR_KEYS.map((key) => (
                         <button
                           key={key}
@@ -270,8 +270,8 @@ export default function WorkspaceDetailPage() {
                             setShowColorPicker(false);
                             await supabase.from("workspaces").update({ color: key }).eq("id", workspaceId);
                           }}
-                          className={`h-6 w-6 rounded-full transition-all ${WORKSPACE_COLOR_MAP[key].dot} ${
-                            workspace.color === key ? "ring-2 ring-gray-400 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 scale-110" : "opacity-70 hover:opacity-100 hover:scale-110"
+                          className={`h-5 w-5 rounded-full transition-all ${WORKSPACE_COLOR_MAP[key].dot} ${
+                            workspace.color === key ? "ring-2 ring-gray-400 ring-offset-1 ring-offset-white dark:ring-offset-gray-800" : "opacity-70 hover:opacity-100 hover:scale-110"
                           }`}
                           title={key}
                         />
