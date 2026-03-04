@@ -31,6 +31,7 @@ import KhuShuttleInfo from "@/components/khu/KhuShuttleInfo";
 import KhuCanvasSync from "@/components/khu/KhuCanvasSync";
 import KhuMealInfo from "@/components/khu/KhuMealInfo";
 import { useIcsFeed } from "@/hooks/useIcsFeed";
+import { useCourseSchedules } from "@/hooks/useCourseSchedules";
 import SortableWidget from "@/components/khu/SortableWidget";
 import WidgetPicker from "@/components/khu/WidgetPicker";
 
@@ -52,6 +53,13 @@ export default function KhuPage() {
   const canvas = useCanvas();
   const { workspaces } = useAllWorkspaceTodos();
   const { events: icsEvents, feedUrl: icsFeedUrl, setFeedUrl: setIcsFeedUrl, loading: icsFeedLoading } = useIcsFeed();
+  const {
+    schedules: courseSchedules,
+    loading: courseSchedulesLoading,
+    addSchedule,
+    deleteSchedule,
+    deleteSchedulesByCourse,
+  } = useCourseSchedules();
   const {
     widgets,
     visibleWidgets,
@@ -291,6 +299,11 @@ export default function KhuPage() {
                 onDeleteAssignment={deleteAssignment}
                 workspaces={workspaces}
                 onLinkWorkspace={linkCourseToWorkspace}
+                courseSchedules={courseSchedules}
+                courseSchedulesLoading={courseSchedulesLoading}
+                onAddSchedule={addSchedule}
+                onDeleteSchedule={deleteSchedule}
+                onDeleteSchedulesByCourse={deleteSchedulesByCourse}
               />
             </div>
           </aside>

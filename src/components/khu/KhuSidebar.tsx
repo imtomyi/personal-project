@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import type { Course, Assignment, AssignmentType, Workspace } from "@/lib/types";
+import type { Course, Assignment, AssignmentType, Workspace, CourseSchedule } from "@/lib/types";
 import CourseManager from "./CourseManager";
+import CourseScheduleEditor from "./CourseScheduleEditor";
 import AddAssignment from "./AddAssignment";
 import KhuAssignmentItem from "./KhuAssignmentItem";
 
@@ -26,6 +27,12 @@ type KhuSidebarProps = {
   onDeleteAssignment: (id: string) => Promise<void>;
   workspaces?: Workspace[];
   onLinkWorkspace?: (courseId: string, workspaceId: string | null) => Promise<void>;
+  // 수업 시간표
+  courseSchedules?: CourseSchedule[];
+  courseSchedulesLoading?: boolean;
+  onAddSchedule?: (schedule: Omit<CourseSchedule, "id" | "user_id" | "created_at">) => Promise<void>;
+  onDeleteSchedule?: (id: string) => Promise<void>;
+  onDeleteSchedulesByCourse?: (courseName: string) => Promise<void>;
 };
 
 type FilterType = "all" | "upcoming" | "overdue" | "today";
@@ -43,6 +50,11 @@ export default function KhuSidebar({
   onDeleteAssignment,
   workspaces,
   onLinkWorkspace,
+  courseSchedules,
+  courseSchedulesLoading,
+  onAddSchedule,
+  onDeleteSchedule,
+  onDeleteSchedulesByCourse,
 }: KhuSidebarProps) {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -111,6 +123,19 @@ export default function KhuSidebar({
           onLinkWorkspace={onLinkWorkspace}
         />
       </div>
+
+      {/* 수업 시간표 관리 */}
+      {onAddSchedule && onDeleteSchedule && onDeleteSchedulesByCourse && (
+        <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+          <CourseScheduleEditor
+            schedules={courseSchedules || []}
+            loading={courseSchedulesLoading || false}
+            onAdd={onAddSchedule}
+            onDelete={onDeleteSchedule}
+            onDeleteByCourse={onDeleteSchedulesByCourse}
+          />
+        </div>
+      )}
 
       {/* 필터 탭 */}
       <div className="flex border-b border-gray-200 px-2 dark:border-gray-700">
