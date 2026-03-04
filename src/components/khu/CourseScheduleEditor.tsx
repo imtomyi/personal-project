@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { CourseSchedule } from "@/lib/types";
+import type { CourseSchedule, Course } from "@/lib/types";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const COURSE_COLORS = [
@@ -17,6 +17,10 @@ type CourseScheduleEditorProps = {
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onDeleteByCourse: (courseName: string) => Promise<void>;
+  // 과목 필터링 (KHU 사이드바에서 사용)
+  courses?: Course[];
+  selectedCourseId?: string | null;
+  onSelectCourse?: (courseId: string | null) => void;
 };
 
 export default function CourseScheduleEditor({
@@ -25,6 +29,9 @@ export default function CourseScheduleEditor({
   onAdd,
   onDelete,
   onDeleteByCourse,
+  courses,
+  selectedCourseId,
+  onSelectCourse,
 }: CourseScheduleEditorProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [courseName, setCourseName] = useState("");
@@ -91,7 +98,7 @@ export default function CourseScheduleEditor({
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-          🕐 수업 시간표
+          📚 수강 과목
         </h3>
         <button
           onClick={() => setIsAdding(!isAdding)}
@@ -232,6 +239,34 @@ export default function CourseScheduleEditor({
         )
       ) : (
         <div className="space-y-2">
+          {/* 과목 필터 (KHU 사이드바용) */}
+          {onSelectCourse && courses && courses.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={() => onSelectCourse(null)}
+                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  !selectedCourseId
+                    ? "bg-[#9B1B30] text-white"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400"
+                }`}
+              >
+                전체
+              </button>
+              {courses.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => onSelectCourse(c.id)}
+                  className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    selectedCourseId === c.id
+                      ? "bg-[#9B1B30] text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400"
+                  }`}
+                >
+                  {c.name.length > 6 ? c.name.slice(0, 6) + "…" : c.name}
+                </button>
+              ))}
+            </div>
+          )}
           {[...grouped.entries()].map(([name, slots]) => (
             <div
               key={name}

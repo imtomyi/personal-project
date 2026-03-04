@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { Course, Assignment, AssignmentType, Workspace, CourseSchedule } from "@/lib/types";
-import CourseManager from "./CourseManager";
 import CourseScheduleEditor from "./CourseScheduleEditor";
 import AddAssignment from "./AddAssignment";
 import KhuAssignmentItem from "./KhuAssignmentItem";
@@ -111,20 +110,7 @@ export default function KhuSidebar({
         )}
       </div>
 
-      {/* 과목 관리 */}
-      <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-        <CourseManager
-          courses={courses}
-          selectedCourseId={selectedCourseId}
-          onSelectCourse={setSelectedCourseId}
-          onAddCourse={onAddCourse}
-          onDeleteCourse={onDeleteCourse}
-          workspaces={workspaces}
-          onLinkWorkspace={onLinkWorkspace}
-        />
-      </div>
-
-      {/* 수업 시간표 관리 */}
+      {/* 수업 시간표 관리 (과목 관리 통합) */}
       {onAddSchedule && onDeleteSchedule && onDeleteSchedulesByCourse && (
         <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
           <CourseScheduleEditor
@@ -133,6 +119,9 @@ export default function KhuSidebar({
             onAdd={onAddSchedule}
             onDelete={onDeleteSchedule}
             onDeleteByCourse={onDeleteSchedulesByCourse}
+            courses={courses}
+            selectedCourseId={selectedCourseId}
+            onSelectCourse={setSelectedCourseId}
           />
         </div>
       )}
