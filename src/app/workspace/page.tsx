@@ -75,7 +75,7 @@ export default function WorkspacesPage() {
   const { carriedOverCount, isProcessing: carryOverProcessing } = useCarryOverPlans();
   const { tasks: allRecurringTasks, deleteRecurringTask } = useRecurringTasks();
   const { habitsWithTime, toggleLog, logs: habitLogs } = useHabits();
-  const { schedules: courseSchedules } = useCourseSchedules();
+  const { schedules: courseSchedules, loading: courseSchedulesLoading, addSchedule, deleteSchedule, deleteSchedulesByCourse } = useCourseSchedules();
   const { events: icsEvents } = useIcsFeed();
   const [showTriage, setShowTriage] = useState(false);
   const todayStr = todayKST();
@@ -909,6 +909,10 @@ export default function WorkspacesPage() {
               courseNames={courseNames}
               courseSchedules={courseSchedules}
               icsEvents={icsEvents}
+              courseSchedulesLoading={courseSchedulesLoading}
+              onAddSchedule={addSchedule}
+              onDeleteSchedule={deleteSchedule}
+              onDeleteSchedulesByCourse={deleteSchedulesByCourse}
             />
           </div>
 

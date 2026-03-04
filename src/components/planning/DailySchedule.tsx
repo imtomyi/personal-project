@@ -16,6 +16,7 @@ import {
 import { todayKST, nowKST, parseLocalDate, minutesToTime } from "@/lib/date";
 import PostponeTodoModal from "./PostponeTodoModal";
 import BlockActionPopover from "./BlockActionPopover";
+import CourseScheduleEditor from "@/components/khu/CourseScheduleEditor";
 
 type DailyScheduleProps = {
   todos: Todo[];
@@ -50,6 +51,11 @@ type DailyScheduleProps = {
   courseSchedules?: CourseSchedule[];
   // ICS 피드 이벤트
   icsEvents?: IcsScheduleEvent[];
+  // 수업 시간표 CRUD (시간표 관리 모달용)
+  courseSchedulesLoading?: boolean;
+  onAddSchedule?: (schedule: Omit<CourseSchedule, "id" | "user_id" | "created_at">) => Promise<void>;
+  onDeleteSchedule?: (id: string) => Promise<void>;
+  onDeleteSchedulesByCourse?: (courseName: string) => Promise<void>;
 };
 
 // ============================================
@@ -289,9 +295,14 @@ export default function DailySchedule({
   onHabitToggle,
   courseSchedules,
   icsEvents,
+  courseSchedulesLoading,
+  onAddSchedule,
+  onDeleteSchedule,
+  onDeleteSchedulesByCourse,
 }: DailyScheduleProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [showPostponeModal, setShowPostponeModal] = useState(false);
+  const [showScheduleManager, setShowScheduleManager] = useState(false);
   const [activePopover, setActivePopover] = useState<{
     block: ScheduleBlock;
     rect: DOMRect;
@@ -736,9 +747,21 @@ export default function DailySchedule({
               {onOpenRoutineManager && (
                 <button
                   onClick={onOpenRoutineManager}
-                  className={`px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:hover:bg-white/[0.08] dark:hover:text-white ${!hasActivePlans ? "border-r border-black/[0.06] dark:border-white/[0.08]" : ""}`}
+                  className="border-r border-black/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-white hover:text-foreground hover:shadow-sm dark:border-white/[0.08] dark:hover:bg-white/[0.08] dark:hover:text-white"
                 >
                   🔁 루틴
+                </button>
+              )}
+              {onAddSchedule && (
+                <button
+                  onClick={() => setShowScheduleManager(!showScheduleManager)}
+                  className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    showScheduleManager
+                      ? "bg-white text-[#007AFF] shadow-sm dark:bg-white/[0.1] dark:text-blue-400"
+                      : "text-secondary hover:bg-white hover:text-foreground hover:shadow-sm dark:hover:bg-white/[0.08] dark:hover:text-white"
+                  } ${!hasActivePlans ? "border-r border-black/[0.06] dark:border-white/[0.08]" : ""}`}
+                >
+                  🏫 수업
                 </button>
               )}
               {!hasActivePlans && (
@@ -797,6 +820,19 @@ export default function DailySchedule({
                 </span>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* 수업 시간표 관리 패널 */}
+        {showScheduleManager && !compact && onAddSchedule && onDeleteSchedule && onDeleteSchedulesByCourse && (
+          <div className="mb-3 rounded-xl border border-black/[0.06] bg-white/80 p-4 backdrop-blur-sm dark:border-white/[0.08] dark:bg-[#1c1c1e]/80">
+            <CourseScheduleEditor
+              schedules={courseSchedules ?? []}
+              loading={courseSchedulesLoading ?? false}
+              onAdd={onAddSchedule}
+              onDelete={onDeleteSchedule}
+              onDeleteByCourse={onDeleteSchedulesByCourse}
+            />
           </div>
         )}
 
