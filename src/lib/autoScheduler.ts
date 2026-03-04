@@ -217,6 +217,14 @@ function generateCourseScheduleBlocks(
 // 1c. ICS 피드 이벤트 → 시간표 블록
 // ============================================
 
+/** Canvas 등에서 자정(T00:00:00)으로 내보내는 이벤트는 사실상 all-day */
+function isEffectivelyAllDay(ev: IcsScheduleEvent): boolean {
+  if (ev.allDay) return true;
+  if (!ev.dtstart.includes("T")) return true;
+  // T00:00:00 또는 T00:00:00Z → 자정 = 사실상 all-day (과제 마감일 등)
+  return /T00:00:00Z?$/.test(ev.dtstart);
+}
+
 function generateIcsBlocks(
   icsEvents: IcsScheduleEvent[],
   dateStr: string,
@@ -224,8 +232,8 @@ function generateIcsBlocks(
   const blocks: ScheduleBlock[] = [];
 
   for (const ev of icsEvents) {
-    // 시간이 있는 이벤트만 시간표에 표시 (all-day 제외)
-    if (ev.allDay || !ev.dtstart.includes("T")) continue;
+    // all-day 또는 자정 이벤트는 시간표 블록 대신 배너로 표시
+    if (isEffectivelyAllDay(ev)) continue;
 
     const start = new Date(ev.dtstart);
     const eventDateStr = toDateStr(start);
@@ -253,7 +261,7 @@ function generateIcsBlocks(
   return blocks;
 }
 
-/** ICS all-day 이벤트 (과제 마감, 시험 등) 중 오늘 날짜 이벤트 반환 */
+/** ICS all-day 이벤트 (과제 마감, 시험 등) 중 특정 날짜 이벤트 반환 */
 export type IcsAllDayEvent = {
   uid: string;
   summary: string;
@@ -267,9 +275,9 @@ export function getIcsAllDayEvents(
   const results: IcsAllDayEvent[] = [];
 
   for (const ev of icsEvents) {
-    if (!ev.allDay && ev.dtstart.includes("T")) continue;
+    // all-day 또는 자정 이벤트만 대상
+    if (!isEffectivelyAllDay(ev)) continue;
 
-    // all-day 이벤트: dtstart가 "YYYY-MM-DD" 형태
     const eventDate = ev.dtstart.slice(0, 10); // "YYYY-MM-DD"
     if (eventDate === dateStr) {
       results.push({
