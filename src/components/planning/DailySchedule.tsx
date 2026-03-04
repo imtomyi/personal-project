@@ -8,6 +8,7 @@ import {
   autoAssignTodos,
   autoAssignDailyPlans,
   placeDdayBlocks,
+  getIcsAllDayEvents,
   type ScheduleBlock,
   type ScheduleBlockType,
   type IcsScheduleEvent,
@@ -428,6 +429,12 @@ export default function DailySchedule({
     [recurringTasks, todos, dayOfWeek, classEvents, today, courseNames, habits, courseSchedules, icsEvents]
   );
 
+  // ICS all-day 이벤트 (과제 마감, 시험 등)
+  const icsAllDayEvents = useMemo(
+    () => (icsEvents ? getIcsAllDayEvents(icsEvents, today) : []),
+    [icsEvents, today],
+  );
+
   // 일일 계획 자동 배치 결과
   const dailyPlanResult = useMemo(() => {
     if (!hasActivePlans || !dailyPlans) return null;
@@ -787,6 +794,29 @@ export default function DailySchedule({
                 >
                   {item.color.icon && `${item.color.icon} `}
                   {item.color.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ICS all-day 이벤트 배너 (과제 마감, 시험 등) */}
+        {icsAllDayEvents.length > 0 && (
+          <div className={`mb-2 flex flex-wrap gap-1.5 ${compact ? "gap-1" : ""}`}>
+            {icsAllDayEvents.map((ev) => (
+              <div
+                key={ev.uid}
+                className={`inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-900/30 ${
+                  compact ? "px-1.5 py-0.5" : "px-2 py-1"
+                }`}
+              >
+                <span className={compact ? "text-[9px]" : "text-[11px]"}>📋</span>
+                <span
+                  className={`font-medium text-sky-700 dark:text-sky-300 ${
+                    compact ? "text-[9px]" : "text-[11px]"
+                  }`}
+                >
+                  {ev.summary}
                 </span>
               </div>
             ))}

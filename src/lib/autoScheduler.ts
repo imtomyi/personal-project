@@ -253,6 +253,36 @@ function generateIcsBlocks(
   return blocks;
 }
 
+/** ICS all-day 이벤트 (과제 마감, 시험 등) 중 오늘 날짜 이벤트 반환 */
+export type IcsAllDayEvent = {
+  uid: string;
+  summary: string;
+  date: string; // YYYY-MM-DD
+};
+
+export function getIcsAllDayEvents(
+  icsEvents: IcsScheduleEvent[],
+  dateStr: string,
+): IcsAllDayEvent[] {
+  const results: IcsAllDayEvent[] = [];
+
+  for (const ev of icsEvents) {
+    if (!ev.allDay && ev.dtstart.includes("T")) continue;
+
+    // all-day 이벤트: dtstart가 "YYYY-MM-DD" 형태
+    const eventDate = ev.dtstart.slice(0, 10); // "YYYY-MM-DD"
+    if (eventDate === dateStr) {
+      results.push({
+        uid: ev.uid,
+        summary: ev.summary,
+        date: eventDate,
+      });
+    }
+  }
+
+  return results;
+}
+
 // ============================================
 // 2. 과제/시험 공부 계획 산출
 // ============================================
