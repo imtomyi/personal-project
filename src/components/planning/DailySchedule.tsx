@@ -304,8 +304,8 @@ export default function DailySchedule({
   const timelineRef = useRef<HTMLDivElement>(null);
   const hasPersisted = useRef(false);
 
-  const today = "2026-03-05"; // TODO: revert → todayKST()
-  const dayOfWeek = 4; // 목요일 (TODO: revert → parseLocalDate(today).getDay())
+  const today = todayKST();
+  const dayOfWeek = parseLocalDate(today).getDay();
 
   // 오늘 기한이지만 아직 daily plan에 없는 할일
   const todayDueTodos = useMemo(() => {
