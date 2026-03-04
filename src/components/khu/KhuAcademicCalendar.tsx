@@ -70,7 +70,7 @@ type SpanBar = {
 
 /* === 레이아웃 상수 === */
 const DATE_ROW_H = 28; // 날짜 숫자 행 고정 높이
-const SPAN_AREA_H = 60; // 스팬 바 영역 고정 높이 (모든 주 동일)
+const SPAN_AREA_H = 36; // 스팬 바 영역 고정 높이 (모든 주 동일)
 
 type Props = {
   workspaces?: Workspace[];

@@ -385,6 +385,14 @@ export default function DailySchedule({
     indigo:  { border: "border-indigo-200 dark:border-indigo-800",  bg: "bg-indigo-50 dark:bg-indigo-900/20",  text: "text-indigo-700 dark:text-indigo-300" },
     teal:    { border: "border-teal-200 dark:border-teal-800",    bg: "bg-teal-50 dark:bg-teal-900/20",    text: "text-teal-700 dark:text-teal-300" },
     pink:    { border: "border-pink-200 dark:border-pink-800",    bg: "bg-pink-50 dark:bg-pink-900/20",    text: "text-pink-700 dark:text-pink-300" },
+    red:     { border: "border-red-200 dark:border-red-800",     bg: "bg-red-50 dark:bg-red-900/20",     text: "text-red-700 dark:text-red-300" },
+    lime:    { border: "border-lime-200 dark:border-lime-800",    bg: "bg-lime-50 dark:bg-lime-900/20",    text: "text-lime-700 dark:text-lime-300" },
+    sky:     { border: "border-sky-200 dark:border-sky-800",     bg: "bg-sky-50 dark:bg-sky-900/20",     text: "text-sky-700 dark:text-sky-300" },
+    violet:  { border: "border-violet-200 dark:border-violet-800",  bg: "bg-violet-50 dark:bg-violet-900/20",  text: "text-violet-700 dark:text-violet-300" },
+    fuchsia: { border: "border-fuchsia-200 dark:border-fuchsia-800", bg: "bg-fuchsia-50 dark:bg-fuchsia-900/20", text: "text-fuchsia-700 dark:text-fuchsia-300" },
+    slate:   { border: "border-slate-200 dark:border-slate-700",   bg: "bg-slate-50 dark:bg-slate-800/20",   text: "text-slate-700 dark:text-slate-300" },
+    gray:    { border: "border-gray-200 dark:border-gray-700",    bg: "bg-gray-50 dark:bg-gray-800/20",    text: "text-gray-600 dark:text-gray-400" },
+    stone:   { border: "border-stone-200 dark:border-stone-700",   bg: "bg-stone-50 dark:bg-stone-800/20",   text: "text-stone-600 dark:text-stone-400" },
   };
 
   function getBlockColorResolved(block: ScheduleBlock): BlockColorConfig {

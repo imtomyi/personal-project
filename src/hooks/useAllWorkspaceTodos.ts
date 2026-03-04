@@ -16,7 +16,9 @@ export type WorkspaceTodo = Todo & {
 // ─── 10색 키맵 워크스페이스 색상 시스템 ───
 export type WorkspaceColorKey =
   | "blue" | "purple" | "emerald" | "amber" | "rose"
-  | "cyan" | "orange" | "indigo" | "teal" | "pink";
+  | "cyan" | "orange" | "indigo" | "teal" | "pink"
+  | "red" | "lime" | "sky" | "violet" | "fuchsia"
+  | "slate" | "gray" | "stone";
 
 type ColorEntry = { bg: string; text: string; dot: string; border: string };
 
@@ -31,6 +33,14 @@ export const WORKSPACE_COLOR_MAP: Record<WorkspaceColorKey, ColorEntry> = {
   indigo:  { bg: "bg-indigo-100 dark:bg-indigo-900/30",  text: "text-indigo-700 dark:text-indigo-400",  dot: "bg-indigo-500",  border: "border-l-indigo-500" },
   teal:    { bg: "bg-teal-100 dark:bg-teal-900/30",    text: "text-teal-700 dark:text-teal-400",    dot: "bg-teal-500",    border: "border-l-teal-500" },
   pink:    { bg: "bg-pink-100 dark:bg-pink-900/30",    text: "text-pink-700 dark:text-pink-400",    dot: "bg-pink-500",    border: "border-l-pink-500" },
+  red:     { bg: "bg-red-100 dark:bg-red-900/30",     text: "text-red-700 dark:text-red-400",     dot: "bg-red-500",     border: "border-l-red-500" },
+  lime:    { bg: "bg-lime-100 dark:bg-lime-900/30",    text: "text-lime-700 dark:text-lime-400",    dot: "bg-lime-500",    border: "border-l-lime-500" },
+  sky:     { bg: "bg-sky-100 dark:bg-sky-900/30",     text: "text-sky-700 dark:text-sky-400",     dot: "bg-sky-500",     border: "border-l-sky-500" },
+  violet:  { bg: "bg-violet-100 dark:bg-violet-900/30",  text: "text-violet-700 dark:text-violet-400",  dot: "bg-violet-500",  border: "border-l-violet-500" },
+  fuchsia: { bg: "bg-fuchsia-100 dark:bg-fuchsia-900/30", text: "text-fuchsia-700 dark:text-fuchsia-400", dot: "bg-fuchsia-500", border: "border-l-fuchsia-500" },
+  slate:   { bg: "bg-slate-100 dark:bg-slate-800/40",   text: "text-slate-700 dark:text-slate-400",   dot: "bg-slate-500",   border: "border-l-slate-500" },
+  gray:    { bg: "bg-gray-100 dark:bg-gray-800/40",    text: "text-gray-600 dark:text-gray-400",    dot: "bg-gray-500",    border: "border-l-gray-400" },
+  stone:   { bg: "bg-stone-100 dark:bg-stone-800/40",   text: "text-stone-600 dark:text-stone-400",   dot: "bg-stone-500",   border: "border-l-stone-400" },
 };
 
 export const WORKSPACE_COLOR_KEYS: WorkspaceColorKey[] = Object.keys(WORKSPACE_COLOR_MAP) as WorkspaceColorKey[];

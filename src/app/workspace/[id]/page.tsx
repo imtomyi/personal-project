@@ -31,6 +31,7 @@ import { useAssignments } from "@/hooks/useAssignments";
 import { useCanvasCalendar } from "@/hooks/useCanvasCalendar";
 import { useHabits } from "@/hooks/useHabits";
 import { useGoals } from "@/hooks/useGoals";
+import { WORKSPACE_COLOR_KEYS, WORKSPACE_COLOR_MAP, getWorkspaceColorByKey } from "@/hooks/useAllWorkspaceTodos";
 
 export default function WorkspaceDetailPage() {
   const params = useParams();
@@ -47,6 +48,7 @@ export default function WorkspaceDetailPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [showApplyTemplate, setShowApplyTemplate] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const [view, setView] = useState<"list" | "calendar" | "matrix" | "kanban">("list");
   const [showRecurring, setShowRecurring] = useState(false);
 
@@ -250,9 +252,38 @@ export default function WorkspaceDetailPage() {
               </svg>
               워크스페이스
             </Link>
-            <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[28px] dark:text-white">
-              {workspace.name}
-            </h1>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  onClick={() => setShowColorPicker((v) => !v)}
+                  className={`h-5 w-5 rounded-full transition-transform hover:scale-125 ${getWorkspaceColorByKey(workspace.color || "blue").dot}`}
+                  title="색상 변경"
+                />
+                {showColorPicker && (
+                  <div className="absolute left-0 top-8 z-50 rounded-xl border border-gray-200 bg-white p-2.5 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="grid grid-cols-6 gap-1.5">
+                      {WORKSPACE_COLOR_KEYS.map((key) => (
+                        <button
+                          key={key}
+                          onClick={async () => {
+                            setWorkspace((prev) => prev ? { ...prev, color: key } : prev);
+                            setShowColorPicker(false);
+                            await supabase.from("workspaces").update({ color: key }).eq("id", workspaceId);
+                          }}
+                          className={`h-6 w-6 rounded-full transition-all ${WORKSPACE_COLOR_MAP[key].dot} ${
+                            workspace.color === key ? "ring-2 ring-gray-400 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 scale-110" : "opacity-70 hover:opacity-100 hover:scale-110"
+                          }`}
+                          title={key}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[28px] dark:text-white">
+                {workspace.name}
+              </h1>
+            </div>
             {workspace.description && (
               <p className="mt-1 text-[13px] text-secondary">
                 {workspace.description}
@@ -398,6 +429,35 @@ export default function WorkspaceDetailPage() {
           </div>
         ) : view === "list" ? (
           <div>
+            {/* ── 반복 할 일 (루틴) ── */}
+            {recurringTasks.filter((rt) => rt.is_active).length > 0 && (
+              <div className="mb-3">
+                <div className="flex flex-wrap gap-2">
+                  {recurringTasks
+                    .filter((rt) => rt.is_active)
+                    .map((rt) => {
+                      const dayLabels = ["일", "월", "화", "수", "목", "금", "토"];
+                      const days = rt.days_of_week?.length
+                        ? rt.days_of_week.map((d) => dayLabels[d]).join("·")
+                        : rt.recurrence === "daily" ? "매일" : rt.recurrence === "weekdays" ? "주중" : "";
+                      return (
+                        <button
+                          key={rt.id}
+                          onClick={() => setShowRecurring(true)}
+                          className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1.5 text-[12px] transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-900/20 dark:hover:bg-violet-900/30"
+                        >
+                          <svg className="h-3 w-3 text-violet-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                          <span className="font-medium text-violet-700 dark:text-violet-300">{rt.title}</span>
+                          {days && <span className="text-violet-500/70 dark:text-violet-400/60">{days}</span>}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             <AddTodo onAdd={handleAddTodo} goals={goals} />
             <TodoList
               todos={activeTodos}
