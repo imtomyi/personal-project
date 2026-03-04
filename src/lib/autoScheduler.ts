@@ -671,11 +671,8 @@ export function autoAssignDailyPlans(
         return false;
       }
 
-      // todo가 이미 완료됨 → 스케줄에서 제외
-      if (todo.is_completed) {
-        stalePlanIds.push(p.id);
-        return false;
-      }
+      // todo가 이미 완료됨 → 스케줄에는 유지 (완료 표시만 변경)
+      // stalePlan으로 제거하지 않음 — UI에서 isCompleted 체크로 시각적 완료 표시
 
       // todo의 due_date가 다른 날로 변경됨 → stale
       if (targetDate && todo.due_date && todo.due_date !== targetDate) {

@@ -170,16 +170,21 @@ export function useHabits() {
       };
       setLogs((prev) => [...prev, optimistic]);
 
-      const { error } = await supabase.from("habit_logs").insert({
+      const { data: inserted, error } = await supabase.from("habit_logs").insert({
         habit_id: habitId,
         user_id: user.id,
         date,
-      });
+      }).select("id, habit_id, date").single();
       if (error) {
         setLogs((prev) => prev.filter((l) => l.id !== optimistic.id));
         throw error;
       }
-      await fetchLogs();
+      // 옵티미스틱 ID를 실제 DB ID로 교체 (realtime 구독과 충돌 방지)
+      if (inserted) {
+        setLogs((prev) =>
+          prev.map((l) => (l.id === optimistic.id ? { ...l, id: inserted.id } : l))
+        );
+      }
     }
   }
 

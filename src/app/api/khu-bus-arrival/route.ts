@@ -8,7 +8,7 @@ const STATIONS = {
 
 // 교내 무료 구간에 해당하는 노선 번호
 const CAMPUS_FREE_ROUTES = [
-  "9", "9-1", "1112", "1560A", "1560B", "5100", "7000", "M5107",
+  "9", "1112", "1560A", "1560B", "5100", "7000", "M5107",
 ];
 
 const DATA_GO_KR_KEY = process.env.DATA_GO_KR_SERVICE_KEY;
