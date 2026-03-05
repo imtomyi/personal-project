@@ -146,37 +146,71 @@ function findFreeSlotsRanked(
 }
 
 // ============================================
-// 선호 시간 근처 빈 슬롯 탐색
+// 선호 시간 기반 최적 슬롯 탐색 (통합 스코어링)
 // ============================================
 
+/** 선호 시간 최대 탐색 범위 (분) — 이 범위 밖은 선호시간 무시하고 집중도 폴백 */
+const PREFERRED_MAX_DISTANCE = 180; // 3시간
+
 /**
- * 선호 시간에 가장 가까운 빈 슬롯의 시작 시점을 반환.
- * 정확한 선호 시간이 다른 블록과 겹칠 때,
- * 가장 가까운 빈 공간에 배치하기 위한 폴백 함수.
+ * 선호 시간 기반 최적 배치 슬롯 탐색 (통합 스코어링).
  *
- * @returns 배치 가능한 시작 시점(분) 또는 null(빈 공간 없음)
+ * 평가 기준 (가중 합산):
+ *   1) 정확 매칭 보너스 — 선호 시간에 정확히 맞으면 최고점 (+30)
+ *   2) 근접도 (proximity, 60%) — 선호 시간에 가까울수록 높은 점수
+ *   3) 집중 점수 (focus, 20%) — 집중하기 좋은 시간대면 가산
+ *   4) 방향 선호 (+5) — 선호 시간 직후 슬롯에 소폭 가산
+ *      (예: 18:30 희망 → 19:00이 18:00보다 자연스러움)
+ *
+ * PREFERRED_MAX_DISTANCE(3시간) 밖의 슬롯은 후보에서 제외하여
+ * 저녁 할일이 아침으로 밀리는 현상 방지.
+ *
+ * @returns 최적 시작 시점(분) 또는 null(3시간 내 적합 슬롯 없음)
  */
-function findNearestSlotStart(
+function findBestSlotForPreferred(
   freeSlots: { start: number; end: number }[],
   preferredStart: number,
   neededMin: number,
 ): number | null {
   let bestStart: number | null = null;
-  let bestDistance = Infinity;
+  let bestScore = -Infinity;
 
   for (const slot of freeSlots) {
     if (slot.end - slot.start < neededMin) continue;
 
-    // 이 슬롯 내에서 가능한 시작 범위: [slot.start, slot.end - neededMin]
-    const earliestStart = slot.start;
+    // 슬롯 내 가능 시작 범위: [slot.start, slot.end - neededMin]
     const latestStart = slot.end - neededMin;
 
-    // 선호 시간에 가장 가까운 시작 시점
-    const candidateStart = Math.max(earliestStart, Math.min(preferredStart, latestStart));
+    // 선호 시간에 가장 가까운 시작점 (클램핑)
+    const candidateStart = Math.max(
+      slot.start,
+      Math.min(preferredStart, latestStart),
+    );
     const distance = Math.abs(candidateStart - preferredStart);
 
-    if (distance < bestDistance) {
-      bestDistance = distance;
+    // 3시간 이상 떨어진 슬롯은 선호시간 배치 후보에서 제외
+    if (distance > PREFERRED_MAX_DISTANCE) continue;
+
+    // ── 스코어링 ──
+
+    // 1. 정확 매칭 보너스: 사용자가 원한 시간 그대로 배치
+    const exactBonus = distance === 0 ? 30 : 0;
+
+    // 2. 근접도 점수 (0–100): 가까울수록 높음
+    const proximityScore = 100 * (1 - distance / PREFERRED_MAX_DISTANCE);
+
+    // 3. 집중 점수 (0–100): 해당 시간대의 집중도
+    const focusScore = getFocusScore(candidateStart);
+
+    // 4. 방향 가산: 선호 시간 이후 → 자연스러운 "뒤로 밀림"
+    const afterBonus = candidateStart >= preferredStart ? 5 : 0;
+
+    // 통합 점수: 근접도 60% + 집중도 20% + 보너스
+    const score =
+      proximityScore * 0.6 + focusScore * 0.2 + exactBonus + afterBonus;
+
+    if (score > bestScore) {
+      bestScore = score;
       bestStart = candidateStart;
     }
   }
@@ -653,7 +687,6 @@ export function autoAssignTodos(
   dateStr?: string,
 ): ScheduleBlock[] {
   try {
-    const SLOT_DURATION = 60;
     const allBlocks = [...(existingBlocks || [])];
 
     // Phase 1: 공부 블록 배치 (마감일 기반)
@@ -664,7 +697,12 @@ export function autoAssignTodos(
       allBlocks.sort((a, b) => a.startMin - b.startMin);
     }
 
-    // Phase 2: 남은 빈 시간에 일반 할일 배치 (선호 시간 우선 → 집중 시간대 순)
+    // Phase 2: 남은 빈 시간에 일반 할일 배치
+    // 정렬 우선순위:
+    //   1) 선호 시간 있는 할일 먼저 (선점 보장)
+    //   2) 선호 시간끼리는 시간순 (이른 시간 먼저 → 충돌 최소화)
+    //   3) 우선순위 높은 것 먼저
+    //   4) 마감일 임박 순
     const uncompletedTodos = (todos || [])
       .filter(
         (t) =>
@@ -673,10 +711,11 @@ export function autoAssignTodos(
           !t.parent_id,
       )
       .sort((a, b) => {
-        // 선호 시간이 있는 할일을 먼저 배치 (선점 보장)
         const hasTimeA = a.due_time ? 0 : 1;
         const hasTimeB = b.due_time ? 0 : 1;
         if (hasTimeA !== hasTimeB) return hasTimeA - hasTimeB;
+        // 선호 시간끼리는 시간순 (08:00 → 18:30 순서로 배치)
+        if (a.due_time && b.due_time) return a.due_time.localeCompare(b.due_time);
         const pa = a.priority ?? 5;
         const pb = b.priority ?? 5;
         if (pa !== pb) return pa - pb;
@@ -689,24 +728,24 @@ export function autoAssignTodos(
 
     for (const todo of uncompletedTodos) {
       let placed = false;
+      // 우선순위 기반 소요 시간 추정 (P1: 90분, P2: 60분, 기타: 45분)
+      const duration = estimateMinutes(todo);
 
-      // 선호 시간이 있으면 해당 시간에 우선 배치 시도
+      // ── Step 1: 선호 시간 기반 통합 스코어링 배치 ──
+      // 정확 매칭 + 근접도 + 집중도 + 방향 선호를 가중 합산
+      // 3시간 이내 최적 슬롯 탐색 (없으면 Step 2로)
       if (todo.due_time) {
         const preferredStart = timeToMinutes(todo.due_time);
-        const preferredEnd = preferredStart + SLOT_DURATION;
-
-        if (preferredEnd <= SCHEDULE_END && preferredStart >= SCHEDULE_START) {
+        if (preferredStart >= SCHEDULE_START && preferredStart + duration <= SCHEDULE_END) {
           allBlocks.sort((a, b) => a.startMin - b.startMin);
           const freeSlots = findFreeSlots(allBlocks);
-          const fits = freeSlots.some(
-            (slot) => slot.start <= preferredStart && slot.end >= preferredEnd,
-          );
-          if (fits) {
+          const bestStart = findBestSlotForPreferred(freeSlots, preferredStart, duration);
+          if (bestStart !== null) {
             allBlocks.push({
               id: `todo-${todo.id}`,
               title: todo.title,
-              startMin: preferredStart,
-              endMin: preferredEnd,
+              startMin: bestStart,
+              endMin: bestStart + duration,
               type: "todo",
               todoId: todo.id,
             });
@@ -715,36 +754,18 @@ export function autoAssignTodos(
         }
       }
 
-      // 폴백 1: 선호 시간 근처 가장 가까운 빈 슬롯 탐색
-      if (!placed && todo.due_time) {
-        const preferredStart = timeToMinutes(todo.due_time);
-        allBlocks.sort((a, b) => a.startMin - b.startMin);
-        const freeSlots = findFreeSlots(allBlocks);
-        const nearestStart = findNearestSlotStart(freeSlots, preferredStart, SLOT_DURATION);
-        if (nearestStart !== null) {
-          allBlocks.push({
-            id: `todo-${todo.id}`,
-            title: todo.title,
-            startMin: nearestStart,
-            endMin: nearestStart + SLOT_DURATION,
-            type: "todo",
-            todoId: todo.id,
-          });
-          placed = true;
-        }
-      }
-
-      // 폴백 2: 집중 점수 높은 빈 슬롯 탐색
+      // ── Step 2: 집중 점수 기반 폴백 ──
+      // 선호 시간 없거나, 3시간 내 슬롯 없을 때 집중도 높은 순서로 배치
       if (!placed) {
         allBlocks.sort((a, b) => a.startMin - b.startMin);
         const rankedSlots = findFreeSlotsRanked(allBlocks);
         for (const slot of rankedSlots) {
-          if (slot.end - slot.start < SLOT_DURATION) continue;
+          if (slot.end - slot.start < duration) continue;
           allBlocks.push({
             id: `todo-${todo.id}`,
             title: todo.title,
             startMin: slot.start,
-            endMin: slot.start + SLOT_DURATION,
+            endMin: slot.start + duration,
             type: "todo",
             todoId: todo.id,
           });
@@ -849,8 +870,11 @@ export function autoAssignDailyPlans(
       });
     }
 
-    // 미배치 계획을 집중 가능 시간대 우선으로 배치
-    // 선호 시간이 있는 할 일을 먼저 배치 (선점 보장)
+    // 미배치 계획을 최적 시간대에 배치
+    // 정렬 우선순위:
+    //   1) 선호 시간 있는 할일 먼저 (선점 보장)
+    //   2) 선호 시간끼리는 시간순 (이른 시간 먼저 → 충돌 최소화)
+    //   3) 사용자 정렬 순서
     if (unscheduled.length > 0) {
       const sorted = [...unscheduled].sort((a, b) => {
         const todoA = (todos || []).find((t) => t.id === a.todo_id);
@@ -858,6 +882,9 @@ export function autoAssignDailyPlans(
         const hasTimeA = todoA?.due_time ? 0 : 1;
         const hasTimeB = todoB?.due_time ? 0 : 1;
         if (hasTimeA !== hasTimeB) return hasTimeA - hasTimeB;
+        // 선호 시간끼리는 시간순 (08:00 → 18:30 순서로 배치)
+        if (todoA?.due_time && todoB?.due_time)
+          return todoA.due_time.localeCompare(todoB.due_time);
         return a.sort_order - b.sort_order;
       });
 
@@ -868,56 +895,34 @@ export function autoAssignDailyPlans(
         const neededMin = plan.estimated_minutes;
         let placed = false;
 
-        // 선호 시간이 있으면 해당 시간에 우선 배치 시도
+        // ── Step 1: 선호 시간 기반 통합 스코어링 배치 ──
+        // 정확 매칭 + 근접도 + 집중도 + 방향 선호를 가중 합산
+        // 3시간 이내 최적 슬롯 탐색 (없으면 Step 2로)
         if (todo.due_time) {
           const preferredStart = timeToMinutes(todo.due_time);
-          const preferredEnd = preferredStart + neededMin;
-
-          if (preferredEnd <= SCHEDULE_END && preferredStart >= SCHEDULE_START) {
+          if (preferredStart >= SCHEDULE_START && preferredStart + neededMin <= SCHEDULE_END) {
             allBlocks.sort((a, b) => a.startMin - b.startMin);
             const freeSlots = findFreeSlots(allBlocks);
-            const fits = freeSlots.some(
-              (slot) => slot.start <= preferredStart && slot.end >= preferredEnd,
-            );
-            if (fits) {
+            const bestStart = findBestSlotForPreferred(freeSlots, preferredStart, neededMin);
+            if (bestStart !== null) {
+              const endMin = bestStart + neededMin;
               allBlocks.push({
                 id: `plan-${plan.id}`,
                 title: todo.title,
-                startMin: preferredStart,
-                endMin: preferredEnd,
+                startMin: bestStart,
+                endMin,
                 type: "todo",
                 todoId: todo.id,
                 planId: plan.id,
               });
-              scheduleUpdates.push({ id: plan.id, startMin: preferredStart, endMin: preferredEnd });
+              scheduleUpdates.push({ id: plan.id, startMin: bestStart, endMin });
               placed = true;
             }
           }
         }
 
-        // 폴백 1: 선호 시간 근처 가장 가까운 빈 슬롯 탐색
-        if (!placed && todo.due_time) {
-          const preferredStart = timeToMinutes(todo.due_time);
-          allBlocks.sort((a, b) => a.startMin - b.startMin);
-          const freeSlots = findFreeSlots(allBlocks);
-          const nearestStart = findNearestSlotStart(freeSlots, preferredStart, neededMin);
-          if (nearestStart !== null) {
-            const endMin = nearestStart + neededMin;
-            allBlocks.push({
-              id: `plan-${plan.id}`,
-              title: todo.title,
-              startMin: nearestStart,
-              endMin,
-              type: "todo",
-              todoId: todo.id,
-              planId: plan.id,
-            });
-            scheduleUpdates.push({ id: plan.id, startMin: nearestStart, endMin });
-            placed = true;
-          }
-        }
-
-        // 폴백 2: 집중 점수 높은 빈 슬롯 탐색 (기존 로직)
+        // ── Step 2: 집중 점수 기반 폴백 ──
+        // 선호 시간 없거나, 3시간 내 슬롯 없을 때 집중도 높은 순서로 배치
         if (!placed) {
           allBlocks.sort((a, b) => a.startMin - b.startMin);
           const rankedSlots = findFreeSlotsRanked(allBlocks);
