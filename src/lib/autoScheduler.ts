@@ -606,11 +606,11 @@ export function generateSchedule(
       blocks.push(...icsBlocks);
     }
 
-    // 4. 시간 미설정 습관 → 빈 슬롯에 자동 배치
+    // 4. 시간 미설정 습관 → 집중 시간대 기반 빈 슬롯에 자동 배치
     if (unscheduledHabits.length > 0) {
-      const freeSlots = findFreeSlots(blocks);
+      const rankedSlots = findFreeSlotsRanked(blocks);
       for (const h of unscheduledHabits) {
-        for (const slot of freeSlots) {
+        for (const slot of rankedSlots) {
           if (slot.end - slot.start >= DEFAULT_HABIT_DURATION) {
             blocks.push({
               id: `habit-${h.id}`,
@@ -628,12 +628,12 @@ export function generateSchedule(
       }
     }
 
-    // 4b. 시간 미설정 반복 할일 → 빈 슬롯에 자동 배치
+    // 4b. 시간 미설정 반복 할일 → 집중 시간대 기반 빈 슬롯에 자동 배치
     const DEFAULT_RECURRING_DURATION = 60; // 반복 할일 기본 60분
     if (unscheduledRecurring.length > 0) {
-      const freeSlots = findFreeSlots(blocks);
+      const rankedSlots = findFreeSlotsRanked(blocks);
       for (const rt of unscheduledRecurring) {
-        for (const slot of freeSlots) {
+        for (const slot of rankedSlots) {
           if (slot.end - slot.start >= DEFAULT_RECURRING_DURATION) {
             blocks.push({
               id: `recurring-${rt.id}`,
