@@ -70,13 +70,21 @@ export function useDailyPlan(dateStr?: string) {
   }
 
   // 일괄 추가 (자동 배치용)
+  // ignoreDuplicates: 이미 플랜이 있으면 사용자가 설정한 estimated_minutes 보존
   async function addPlanBatch(
     items: { todoId: string; estimatedMinutes: number }[],
   ) {
     if (!user || items.length === 0) return;
     const baseOrder =
       plans.length > 0 ? Math.max(...plans.map((p) => p.sort_order)) + 1 : 0;
-    const rows = items.map((item, i) => ({
+    // 이미 플랜이 있는 할일은 제외 (사용자 설정값 보존)
+    const existingTodoIds = new Set(plans.map((p) => p.todo_id));
+    const newItems = items.filter((item) => !existingTodoIds.has(item.todoId));
+    if (newItems.length === 0) {
+      await fetchPlans();
+      return;
+    }
+    const rows = newItems.map((item, i) => ({
       user_id: user.id,
       todo_id: item.todoId,
       date: targetDate,
@@ -85,7 +93,7 @@ export function useDailyPlan(dateStr?: string) {
     }));
     const { error } = await supabase
       .from("daily_plans")
-      .upsert(rows, { onConflict: "todo_id,date" });
+      .upsert(rows, { onConflict: "todo_id,date", ignoreDuplicates: true });
     if (!error) await fetchPlans();
   }
 
