@@ -541,9 +541,9 @@ export function generateSchedule(
   try {
     const blocks: ScheduleBlock[] = [];
 
-    // 1. 반복 일정 배치 (고정)
-    const todayRecurring = (recurringTasks || []).filter((t) => {
-      if (!t.is_active || !t.time_start) return false;
+    // 1. 반복 일정 배치 (고정 + 미설정 분리)
+    const allTodayRecurring = (recurringTasks || []).filter((t) => {
+      if (!t.is_active) return false;
       switch (t.recurrence) {
         case "daily":
           return true;
@@ -557,20 +557,23 @@ export function generateSchedule(
       }
     });
 
-    for (const rt of todayRecurring) {
-      if (!rt.time_start) continue;
-      const startMin = timeToMinutes(rt.time_start);
-      const endMin = rt.time_end ? timeToMinutes(rt.time_end) : startMin + 60;
-
-      blocks.push({
-        id: `recurring-${rt.id}`,
-        title: rt.title,
-        startMin,
-        endMin,
-        type: "recurring",
-        color: "blue",
-        recurringTaskId: rt.id,
-      });
+    const unscheduledRecurring: RecurringTask[] = [];
+    for (const rt of allTodayRecurring) {
+      if (rt.time_start) {
+        const startMin = timeToMinutes(rt.time_start);
+        const endMin = rt.time_end ? timeToMinutes(rt.time_end) : startMin + 60;
+        blocks.push({
+          id: `recurring-${rt.id}`,
+          title: rt.title,
+          startMin,
+          endMin,
+          type: "recurring",
+          color: "blue",
+          recurringTaskId: rt.id,
+        });
+      } else {
+        unscheduledRecurring.push(rt);
+      }
     }
 
     // 2. 습관 블록 배치 (고정 시간)
@@ -616,8 +619,32 @@ export function generateSchedule(
               endMin: slot.start + DEFAULT_HABIT_DURATION,
               type: "habit" as const,
               color: "violet",
+              habitId: h.id,
             });
             slot.start += DEFAULT_HABIT_DURATION;
+            break;
+          }
+        }
+      }
+    }
+
+    // 4b. 시간 미설정 반복 할일 → 빈 슬롯에 자동 배치
+    const DEFAULT_RECURRING_DURATION = 60; // 반복 할일 기본 60분
+    if (unscheduledRecurring.length > 0) {
+      const freeSlots = findFreeSlots(blocks);
+      for (const rt of unscheduledRecurring) {
+        for (const slot of freeSlots) {
+          if (slot.end - slot.start >= DEFAULT_RECURRING_DURATION) {
+            blocks.push({
+              id: `recurring-${rt.id}`,
+              title: `🔁 ${rt.title}`,
+              startMin: slot.start,
+              endMin: slot.start + DEFAULT_RECURRING_DURATION,
+              type: "recurring",
+              color: "blue",
+              recurringTaskId: rt.id,
+            });
+            slot.start += DEFAULT_RECURRING_DURATION;
             break;
           }
         }
