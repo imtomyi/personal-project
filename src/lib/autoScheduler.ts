@@ -625,7 +625,7 @@ export function autoAssignTodos(
       allBlocks.sort((a, b) => a.startMin - b.startMin);
     }
 
-    // Phase 2: 남은 빈 시간에 일반 할일 배치 (집중 시간대 우선)
+    // Phase 2: 남은 빈 시간에 일반 할일 배치 (선호 시간 우선 → 집중 시간대 순)
     const uncompletedTodos = (todos || [])
       .filter(
         (t) =>
@@ -634,6 +634,10 @@ export function autoAssignTodos(
           !t.parent_id,
       )
       .sort((a, b) => {
+        // 선호 시간이 있는 할일을 먼저 배치 (선점 보장)
+        const hasTimeA = a.due_time ? 0 : 1;
+        const hasTimeB = b.due_time ? 0 : 1;
+        if (hasTimeA !== hasTimeB) return hasTimeA - hasTimeB;
         const pa = a.priority ?? 5;
         const pb = b.priority ?? 5;
         if (pa !== pb) return pa - pb;
@@ -645,21 +649,50 @@ export function autoAssignTodos(
       });
 
     for (const todo of uncompletedTodos) {
-      allBlocks.sort((a, b) => a.startMin - b.startMin);
-      const rankedSlots = findFreeSlotsRanked(allBlocks);
       let placed = false;
-      for (const slot of rankedSlots) {
-        if (slot.end - slot.start < SLOT_DURATION) continue;
-        allBlocks.push({
-          id: `todo-${todo.id}`,
-          title: todo.title,
-          startMin: slot.start,
-          endMin: slot.start + SLOT_DURATION,
-          type: "todo",
-          todoId: todo.id,
-        });
-        placed = true;
-        break;
+
+      // 선호 시간이 있으면 해당 시간에 우선 배치 시도
+      if (todo.due_time) {
+        const preferredStart = timeToMinutes(todo.due_time);
+        const preferredEnd = preferredStart + SLOT_DURATION;
+
+        if (preferredEnd <= SCHEDULE_END && preferredStart >= SCHEDULE_START) {
+          allBlocks.sort((a, b) => a.startMin - b.startMin);
+          const freeSlots = findFreeSlots(allBlocks);
+          const fits = freeSlots.some(
+            (slot) => slot.start <= preferredStart && slot.end >= preferredEnd,
+          );
+          if (fits) {
+            allBlocks.push({
+              id: `todo-${todo.id}`,
+              title: todo.title,
+              startMin: preferredStart,
+              endMin: preferredEnd,
+              type: "todo",
+              todoId: todo.id,
+            });
+            placed = true;
+          }
+        }
+      }
+
+      // 폴백: 집중 점수 높은 빈 슬롯 탐색
+      if (!placed) {
+        allBlocks.sort((a, b) => a.startMin - b.startMin);
+        const rankedSlots = findFreeSlotsRanked(allBlocks);
+        for (const slot of rankedSlots) {
+          if (slot.end - slot.start < SLOT_DURATION) continue;
+          allBlocks.push({
+            id: `todo-${todo.id}`,
+            title: todo.title,
+            startMin: slot.start,
+            endMin: slot.start + SLOT_DURATION,
+            type: "todo",
+            todoId: todo.id,
+          });
+          placed = true;
+          break;
+        }
       }
       if (!placed) break; // 더 이상 빈 공간 없음
     }
