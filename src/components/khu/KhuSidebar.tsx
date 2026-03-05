@@ -57,6 +57,7 @@ export default function KhuSidebar({
 }: KhuSidebarProps) {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [showCourseEditor, setShowCourseEditor] = useState(false);
 
   // 필터링된 과제 목록
   function getFilteredAssignments(): Assignment[] {
@@ -110,19 +111,64 @@ export default function KhuSidebar({
         )}
       </div>
 
-      {/* 수업 시간표 관리 (과목 관리 통합) */}
+      {/* 과목 필터 칩 + 수업 시간표 관리 (접기/펼치기) */}
       {onAddSchedule && onDeleteSchedule && onDeleteSchedulesByCourse && (
-        <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
-          <CourseScheduleEditor
-            schedules={courseSchedules || []}
-            loading={courseSchedulesLoading || false}
-            onAdd={onAddSchedule}
-            onDelete={onDeleteSchedule}
-            onDeleteByCourse={onDeleteSchedulesByCourse}
-            courses={courses}
-            selectedCourseId={selectedCourseId}
-            onSelectCourse={setSelectedCourseId}
-          />
+        <div className="border-b border-gray-200 px-4 py-2.5 dark:border-gray-700">
+          {/* 과목 필터 칩 — 항상 표시 */}
+          {courses.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                onClick={() => setSelectedCourseId(null)}
+                className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                  !selectedCourseId
+                    ? "bg-[#9B1B30] text-white"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400"
+                }`}
+              >
+                전체
+              </button>
+              {courses.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCourseId(c.id)}
+                  className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+                    selectedCourseId === c.id
+                      ? "bg-[#9B1B30] text-white"
+                      : "bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400"
+                  }`}
+                >
+                  {c.name.length > 6 ? c.name.slice(0, 6) + "…" : c.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* 수강 과목 상세 토글 */}
+          <button
+            onClick={() => setShowCourseEditor(!showCourseEditor)}
+            className="mt-2 flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-[11px] font-medium text-gray-400 hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-gray-700/50 dark:hover:text-gray-300"
+          >
+            <svg
+              className={`h-3 w-3 transition-transform ${showCourseEditor ? "rotate-90" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            📚 수강 과목 관리 ({(courseSchedules || []).length > 0
+              ? `${new Set((courseSchedules || []).map(s => s.course_name)).size}과목`
+              : "미등록"})
+          </button>
+          {/* 수강 과목 상세 — 접기/펼치기 */}
+          {showCourseEditor && (
+            <div className="mt-2">
+              <CourseScheduleEditor
+                schedules={courseSchedules || []}
+                loading={courseSchedulesLoading || false}
+                onAdd={onAddSchedule}
+                onDelete={onDeleteSchedule}
+                onDeleteByCourse={onDeleteSchedulesByCourse}
+              />
+            </div>
+          )}
         </div>
       )}
 
