@@ -146,6 +146,45 @@ function findFreeSlotsRanked(
 }
 
 // ============================================
+// 선호 시간 근처 빈 슬롯 탐색
+// ============================================
+
+/**
+ * 선호 시간에 가장 가까운 빈 슬롯의 시작 시점을 반환.
+ * 정확한 선호 시간이 다른 블록과 겹칠 때,
+ * 가장 가까운 빈 공간에 배치하기 위한 폴백 함수.
+ *
+ * @returns 배치 가능한 시작 시점(분) 또는 null(빈 공간 없음)
+ */
+function findNearestSlotStart(
+  freeSlots: { start: number; end: number }[],
+  preferredStart: number,
+  neededMin: number,
+): number | null {
+  let bestStart: number | null = null;
+  let bestDistance = Infinity;
+
+  for (const slot of freeSlots) {
+    if (slot.end - slot.start < neededMin) continue;
+
+    // 이 슬롯 내에서 가능한 시작 범위: [slot.start, slot.end - neededMin]
+    const earliestStart = slot.start;
+    const latestStart = slot.end - neededMin;
+
+    // 선호 시간에 가장 가까운 시작 시점
+    const candidateStart = Math.max(earliestStart, Math.min(preferredStart, latestStart));
+    const distance = Math.abs(candidateStart - preferredStart);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestStart = candidateStart;
+    }
+  }
+
+  return bestStart;
+}
+
+// ============================================
 // 1. Canvas 수업 블록 생성
 // ============================================
 
@@ -676,7 +715,26 @@ export function autoAssignTodos(
         }
       }
 
-      // 폴백: 집중 점수 높은 빈 슬롯 탐색
+      // 폴백 1: 선호 시간 근처 가장 가까운 빈 슬롯 탐색
+      if (!placed && todo.due_time) {
+        const preferredStart = timeToMinutes(todo.due_time);
+        allBlocks.sort((a, b) => a.startMin - b.startMin);
+        const freeSlots = findFreeSlots(allBlocks);
+        const nearestStart = findNearestSlotStart(freeSlots, preferredStart, SLOT_DURATION);
+        if (nearestStart !== null) {
+          allBlocks.push({
+            id: `todo-${todo.id}`,
+            title: todo.title,
+            startMin: nearestStart,
+            endMin: nearestStart + SLOT_DURATION,
+            type: "todo",
+            todoId: todo.id,
+          });
+          placed = true;
+        }
+      }
+
+      // 폴백 2: 집중 점수 높은 빈 슬롯 탐색
       if (!placed) {
         allBlocks.sort((a, b) => a.startMin - b.startMin);
         const rankedSlots = findFreeSlotsRanked(allBlocks);
@@ -837,7 +895,29 @@ export function autoAssignDailyPlans(
           }
         }
 
-        // 폴백: 집중 점수 높은 빈 슬롯 탐색 (기존 로직)
+        // 폴백 1: 선호 시간 근처 가장 가까운 빈 슬롯 탐색
+        if (!placed && todo.due_time) {
+          const preferredStart = timeToMinutes(todo.due_time);
+          allBlocks.sort((a, b) => a.startMin - b.startMin);
+          const freeSlots = findFreeSlots(allBlocks);
+          const nearestStart = findNearestSlotStart(freeSlots, preferredStart, neededMin);
+          if (nearestStart !== null) {
+            const endMin = nearestStart + neededMin;
+            allBlocks.push({
+              id: `plan-${plan.id}`,
+              title: todo.title,
+              startMin: nearestStart,
+              endMin,
+              type: "todo",
+              todoId: todo.id,
+              planId: plan.id,
+            });
+            scheduleUpdates.push({ id: plan.id, startMin: nearestStart, endMin });
+            placed = true;
+          }
+        }
+
+        // 폴백 2: 집중 점수 높은 빈 슬롯 탐색 (기존 로직)
         if (!placed) {
           allBlocks.sort((a, b) => a.startMin - b.startMin);
           const rankedSlots = findFreeSlotsRanked(allBlocks);
