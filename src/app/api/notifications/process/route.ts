@@ -23,11 +23,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "VAPID configuration failed", detail: String(err) }, { status: 500 });
   }
 
-  // Verify cron secret if set
+  // Auth: allow Vercel Cron (with CRON_SECRET) and in-app requests (no auth header)
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${cronSecret}`) {
+    // If an auth header is present, it must match CRON_SECRET
+    // If no auth header, allow (same-origin in-app request via fetch)
+    if (authHeader && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }

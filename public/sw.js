@@ -1,4 +1,4 @@
-const CACHE_NAME = "collab-todo-v2";
+const CACHE_NAME = "collab-todo-v3";
 
 // Assets to pre-cache on install
 const PRECACHE_URLS = [
@@ -88,6 +88,16 @@ self.addEventListener("push", (event) => {
       requireInteraction: level >= 2,
     })
   );
+});
+
+// ─── Periodic Background Sync ────────────────────────────────────────
+// Runs periodically even when the app is closed (Chrome 80+, requires engagement)
+self.addEventListener("periodicsync", (event) => {
+  if (event.tag === "notification-check") {
+    event.waitUntil(
+      fetch("/api/notifications/process").catch(() => {})
+    );
+  }
 });
 
 self.addEventListener("notificationclick", (event) => {
